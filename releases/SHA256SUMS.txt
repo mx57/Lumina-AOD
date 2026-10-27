@@ -1,0 +1,2 @@
+e36d58d0e27f55cf2ce90b4387e35f6a06cdb260b0b5c4891d6bc52c30577d46  releases/LuminaAOD-v1.0-arm64-v8a.apk
+e36d58d0e27f55cf2ce90b4387e35f6a06cdb260b0b5c4891d6bc52c30577d46  releases/LuminaAOD-v1.0-armeabi-v7a.apk

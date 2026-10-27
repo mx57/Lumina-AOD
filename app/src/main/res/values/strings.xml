@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Lumina AOD</string>
+    <string name="qs_tile_label">Lumina AOD</string>
+    <string name="qs_tile_subtitle_active">Активен • Экономия AMOLED</string>
+    <string name="qs_tile_subtitle_sleep">Глубокий сон</string>
+    <string name="tab_studio">Студия AOD</string>
+    <string name="tab_island">Остров и Кружок</string>
+    <string name="tab_weather">Погода</string>
+    <string name="tab_battery">Сон и Шторка</string>
+    <string name="launch_live_aod">Запустить экран AOD</string>
+    <string name="notification_channel_name">Панель быстрого управления Lumina AOD</string>
+    <string name="notification_channel_desc">Быстрое переключение Always On Display, Динамического острова и режима Глубокого сна</string>
+</resources>

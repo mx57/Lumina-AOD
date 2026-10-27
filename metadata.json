@@ -1,0 +1,6 @@
+{
+  "name": "Lumina AOD",
+  "description": "Универсальный комбайн Always On Display для AMOLED-экранов с интерактивным Динамическим островом, кружком уведомлений вокруг камеры, живой погодой, быстрой панелью в шторке и умным режимом глубокого сна.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
