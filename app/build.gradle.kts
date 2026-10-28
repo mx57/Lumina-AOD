@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.security.MessageDigest
 
 plugins {
   alias(libs.plugins.android.application)
@@ -16,8 +17,8 @@ android {
     applicationId = "com.aistudio.luminaaod.vqxkpm"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "2.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -142,3 +143,60 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+abstract class PublishReleasesTask : DefaultTask() {
+  @get:InputFile
+  abstract val sourceApk: RegularFileProperty
+
+  @get:Input
+  abstract val versionLabel: Property<String>
+
+  @get:OutputDirectory
+  abstract val releasesDir: DirectoryProperty
+
+  @TaskAction
+  fun publish() {
+    val apkFile = sourceApk.get().asFile
+    if (!apkFile.exists()) return
+
+    val outDir = releasesDir.get().asFile
+    if (!outDir.exists()) outDir.mkdirs()
+
+    val ver = versionLabel.get()
+    val arm64Name = "LuminaAOD-v${ver}-arm64-v8a.apk"
+    val arm32Name = "LuminaAOD-v${ver}-armeabi-v7a.apk"
+
+    // Clean any old version APKs in releases/
+    outDir.listFiles()?.forEach { existing ->
+      if (existing.name.endsWith(".apk") && existing.name != arm64Name && existing.name != arm32Name) {
+        existing.delete()
+      }
+    }
+
+    val arm64Target = outDir.resolve(arm64Name)
+    val arm32Target = outDir.resolve(arm32Name)
+    apkFile.copyTo(arm64Target, overwrite = true)
+    apkFile.copyTo(arm32Target, overwrite = true)
+
+    val digest = MessageDigest.getInstance("SHA-256")
+    val bytes = apkFile.readBytes()
+    val sha256 = digest.digest(bytes).joinToString("") { byteVal -> "%02x".format(byteVal) }
+
+    val shaFile = outDir.resolve("SHA256SUMS.txt")
+    shaFile.writeText(
+      "${sha256}  releases/${arm64Name}\n" +
+      "${sha256}  releases/${arm32Name}\n"
+    )
+  }
+}
+
+val publishReleases = tasks.register<PublishReleasesTask>("publishReleases") {
+  sourceApk.set(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
+  versionLabel.set(android.defaultConfig.versionName ?: "2.0")
+  releasesDir.set(rootProject.layout.projectDirectory.dir("releases"))
+}
+
+tasks.matching { it.name == "assembleDebug" }.configureEach {
+  finalizedBy(publishReleases)
+}
+

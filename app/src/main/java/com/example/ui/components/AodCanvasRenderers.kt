@@ -1,10 +1,14 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -49,9 +53,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -90,21 +94,22 @@ fun EdgeLightingAndCameraRingCanvas(
     cornerRadiusDp: Dp = 32.dp,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "edge_and_ring_anim")
+    val speed = config.animationSpeedMultiplier.coerceIn(0.5f, 2.0f)
+    val infiniteTransition = rememberInfiniteTransition(label = "edge_and_ring_anim_2026")
     val phase by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3600, easing = LinearEasing),
+            animation = tween(durationMillis = (3000 / speed).toInt().coerceAtLeast(800), easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "phase"
     )
     val breathe by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
+        initialValue = 0.28f,
         targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1800, easing = LinearEasing),
+            animation = tween(durationMillis = (1500 / speed).toInt().coerceAtLeast(500), easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "breathe"
@@ -120,46 +125,78 @@ fun EdgeLightingAndCameraRingCanvas(
         val h = size.height
         val cornerPx = cornerRadiusDp.toPx()
 
-        // 1. Render Edge Lighting
+        // 1. Render Multi-Layered 2026 Shader Edge Lighting
         when (config.edgeStyle) {
             EdgeLightingStyle.NEON_WAVE -> {
                 val angle = phase * 2f * PI.toFloat()
-                val cx = w / 2f + cos(angle) * (w * 0.4f)
-                val cy = h / 2f + sin(angle) * (h * 0.4f)
+                val cx = w / 2f + cos(angle) * (w * 0.42f)
+                val cy = h / 2f + sin(angle) * (h * 0.42f)
                 val brush = Brush.sweepGradient(
-                    colors = listOf(primary, secondary, accent, primary),
+                    colors = listOf(primary, secondary, accent, notifColor, primary),
                     center = Offset(cx.coerceIn(1f, w - 1f), cy.coerceIn(1f, h - 1f))
                 )
+                // Outer Soft Bloom Halo
+                drawRoundRect(
+                    brush = brush,
+                    topLeft = Offset(2.dp.toPx(), 2.dp.toPx()),
+                    size = Size(w - 4.dp.toPx(), h - 4.dp.toPx()),
+                    cornerRadius = CornerRadius(cornerPx, cornerPx),
+                    alpha = 0.35f,
+                    style = Stroke(width = 11.dp.toPx())
+                )
+                // Core High-Intensity Neon Wire
                 drawRoundRect(
                     brush = brush,
                     topLeft = Offset(3.dp.toPx(), 3.dp.toPx()),
                     size = Size(w - 6.dp.toPx(), h - 6.dp.toPx()),
                     cornerRadius = CornerRadius(cornerPx, cornerPx),
-                    style = Stroke(width = 4.dp.toPx())
+                    style = Stroke(width = 3.5.dp.toPx())
                 )
             }
             EdgeLightingStyle.LASER_CHASE -> {
                 val strokeW = 4.dp.toPx()
                 val progressY = phase * h
                 val invY = (1f - phase) * h
-                // Left laser beam
+                // Left laser beam + bloom
                 drawLine(
                     brush = Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, primary, secondary, Color.Transparent),
-                        startY = (progressY - h * 0.25f),
-                        endY = (progressY + h * 0.25f)
+                        colors = listOf(Color.Transparent, primary.copy(alpha = 0.35f), secondary.copy(alpha = 0.35f), Color.Transparent),
+                        startY = (progressY - h * 0.32f),
+                        endY = (progressY + h * 0.32f)
+                    ),
+                    start = Offset(strokeW, 0f),
+                    end = Offset(strokeW, h),
+                    strokeWidth = strokeW * 3f,
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, primary, secondary, PureWhite, Color.Transparent),
+                        startY = (progressY - h * 0.24f),
+                        endY = (progressY + h * 0.24f)
                     ),
                     start = Offset(strokeW, 0f),
                     end = Offset(strokeW, h),
                     strokeWidth = strokeW,
                     cap = StrokeCap.Round
                 )
-                // Right laser beam
+                // Right laser beam + bloom
                 drawLine(
                     brush = Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, secondary, primary, Color.Transparent),
-                        startY = (invY - h * 0.25f),
-                        endY = (invY + h * 0.25f)
+                        colors = listOf(Color.Transparent, secondary.copy(alpha = 0.35f), primary.copy(alpha = 0.35f), Color.Transparent),
+                        startY = (invY - h * 0.32f),
+                        endY = (invY + h * 0.32f)
+                    ),
+                    start = Offset(w - strokeW, 0f),
+                    end = Offset(w - strokeW, h),
+                    strokeWidth = strokeW * 3f,
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, secondary, primary, PureWhite, Color.Transparent),
+                        startY = (invY - h * 0.24f),
+                        endY = (invY + h * 0.24f)
                     ),
                     start = Offset(w - strokeW, 0f),
                     end = Offset(w - strokeW, h),
@@ -168,46 +205,58 @@ fun EdgeLightingAndCameraRingCanvas(
                 )
             }
             EdgeLightingStyle.AUDIO_SPECTRUM -> {
-                val barCount = 18
-                val stepY = (h * 0.65f) / barCount
-                val startY = h * 0.18f
+                val barCount = 22
+                val stepY = (h * 0.68f) / barCount
+                val startY = h * 0.16f
                 for (i in 0 until barCount) {
-                    val wave = sin((phase * 2f * PI + i * 0.55).toFloat())
-                    val barLen = (8.dp.toPx() + (wave + 1f) * 10.dp.toPx())
+                    val wave = sin((phase * 2f * PI + i * 0.52).toFloat())
+                    val harmonic = cos((phase * 4f * PI - i * 0.31).toFloat())
+                    val barLen = (6.dp.toPx() + ((wave + harmonic + 2f) / 4f) * 22.dp.toPx())
                     val y = startY + i * stepY
-                    val barColor = if (i % 2 == 0) primary else secondary
+                    val barColor = when (i % 3) {
+                        0 -> primary
+                        1 -> secondary
+                        else -> accent
+                    }
                     // Left equalizer bar
                     drawLine(
-                        color = barColor.copy(alpha = 0.85f),
+                        color = barColor.copy(alpha = 0.9f),
                         start = Offset(2.dp.toPx(), y),
                         end = Offset(2.dp.toPx() + barLen, y),
-                        strokeWidth = 3.dp.toPx(),
+                        strokeWidth = 2.8.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                     // Right equalizer bar
                     drawLine(
-                        color = barColor.copy(alpha = 0.85f),
+                        color = barColor.copy(alpha = 0.9f),
                         start = Offset(w - 2.dp.toPx(), y),
                         end = Offset(w - 2.dp.toPx() - barLen, y),
-                        strokeWidth = 3.dp.toPx(),
+                        strokeWidth = 2.8.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                 }
             }
             EdgeLightingStyle.BREATHING_GLOW -> {
                 drawRoundRect(
-                    color = primary.copy(alpha = breathe * 0.85f),
+                    color = notifColor.copy(alpha = breathe * 0.28f),
+                    topLeft = Offset(2.dp.toPx(), 2.dp.toPx()),
+                    size = Size(w - 4.dp.toPx(), h - 4.dp.toPx()),
+                    cornerRadius = CornerRadius(cornerPx, cornerPx),
+                    style = Stroke(width = (8f + breathe * 6f).dp.toPx())
+                )
+                drawRoundRect(
+                    color = primary.copy(alpha = breathe * 0.9f),
                     topLeft = Offset(3.dp.toPx(), 3.dp.toPx()),
                     size = Size(w - 6.dp.toPx(), h - 6.dp.toPx()),
                     cornerRadius = CornerRadius(cornerPx, cornerPx),
-                    style = Stroke(width = (2.5f + breathe * 3f).dp.toPx())
+                    style = Stroke(width = (2.2f + breathe * 2.5f).dp.toPx())
                 )
             }
             EdgeLightingStyle.CORNER_SPARKS -> {
-                val arcSize = 54.dp.toPx()
+                val arcSize = 58.dp.toPx()
                 val pad = 4.dp.toPx()
-                val stroke = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-                val sparkColor = primary.copy(alpha = 0.5f + 0.5f * breathe)
+                val stroke = Stroke(width = 4.2.dp.toPx(), cap = StrokeCap.Round)
+                val sparkColor = primary.copy(alpha = 0.55f + 0.45f * breathe)
                 drawArc(
                     color = sparkColor,
                     startAngle = 180f,
@@ -218,7 +267,7 @@ fun EdgeLightingAndCameraRingCanvas(
                     style = stroke
                 )
                 drawArc(
-                    color = secondary.copy(alpha = 0.5f + 0.5f * breathe),
+                    color = secondary.copy(alpha = 0.55f + 0.45f * breathe),
                     startAngle = 270f,
                     sweepAngle = 90f,
                     useCenter = false,
@@ -227,7 +276,7 @@ fun EdgeLightingAndCameraRingCanvas(
                     style = stroke
                 )
                 drawArc(
-                    color = secondary.copy(alpha = 0.5f + 0.5f * breathe),
+                    color = secondary.copy(alpha = 0.55f + 0.45f * breathe),
                     startAngle = 90f,
                     sweepAngle = 90f,
                     useCenter = false,
@@ -248,13 +297,34 @@ fun EdgeLightingAndCameraRingCanvas(
             EdgeLightingStyle.OFF -> Unit
         }
 
+        // 1b. Optional Floating Wave Particles along edges (2026 Shader Particles)
+        if (config.edgeParticleSparksEnabled && config.edgeStyle != EdgeLightingStyle.OFF) {
+            val particleCount = 8
+            for (p in 0 until particleCount) {
+                val pProgress = (phase + p * (1f / particleCount)) % 1f
+                val py = pProgress * h
+                val pxOffset = (sin((pProgress * 4 * PI + p).toFloat()) * 6.dp.toPx()).toFloat()
+                val pColor = if (p % 2 == 0) primary else secondary
+                drawCircle(
+                    color = pColor.copy(alpha = 0.72f * sin(pProgress * PI.toFloat())),
+                    radius = 2.5.dp.toPx(),
+                    center = Offset(8.dp.toPx() + pxOffset, py)
+                )
+                drawCircle(
+                    color = pColor.copy(alpha = 0.72f * sin(pProgress * PI.toFloat())),
+                    radius = 2.5.dp.toPx(),
+                    center = Offset(w - 8.dp.toPx() - pxOffset, h - py)
+                )
+            }
+        }
+
         // 2. Render Camera Cutout Notification & Battery Energy Ring
         val holeCenterX = (w / 2f) + config.cameraHoleOffsetXDp.dp.toPx()
         val holeCenterY = config.cameraHoleOffsetYDp.dp.toPx() + config.cameraRingRadiusDp.dp.toPx()
         val ringRadius = config.cameraRingRadiusDp.dp.toPx()
         val ringThickness = config.cameraRingThicknessDp.dp.toPx()
 
-        // Always draw physical camera punch-hole core
+        // Physical camera punch-hole core
         drawCircle(
             color = PitchBlack,
             radius = (ringRadius - ringThickness * 0.6f).coerceAtLeast(6f),
@@ -262,12 +332,22 @@ fun EdgeLightingAndCameraRingCanvas(
         )
 
         if (config.isCameraRingEnabled) {
+            // Soft outer neon halo around camera ring
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(notifColor.copy(alpha = 0.38f * breathe), Color.Transparent),
+                    center = Offset(holeCenterX, holeCenterY),
+                    radius = ringRadius * 1.85f
+                ),
+                radius = ringRadius * 1.85f,
+                center = Offset(holeCenterX, holeCenterY)
+            )
+
             when (config.cameraRingMode) {
                 CameraRingMode.COMBO_PULSE_AND_BATTERY -> {
-                    // Outer subtle rotating notification ring
                     drawArc(
                         brush = Brush.sweepGradient(
-                            colors = listOf(notifColor, primary, notifColor),
+                            colors = listOf(notifColor, primary, secondary, notifColor),
                             center = Offset(holeCenterX, holeCenterY)
                         ),
                         startAngle = phase * 360f,
@@ -277,7 +357,6 @@ fun EdgeLightingAndCameraRingCanvas(
                         size = Size(ringRadius * 2f, ringRadius * 2f),
                         style = Stroke(width = ringThickness, cap = StrokeCap.Round)
                     )
-                    // Inner battery level arc
                     val innerR = ringRadius - ringThickness - 2.dp.toPx()
                     if (innerR > 4f) {
                         val batteryColor = when {
@@ -310,14 +389,12 @@ fun EdgeLightingAndCameraRingCanvas(
                         batteryPercent > 25 -> SolarAmber
                         else -> MatrixRed
                     }
-                    // Track background
                     drawCircle(
                         color = batteryColor.copy(alpha = 0.2f),
                         radius = ringRadius,
                         center = Offset(holeCenterX, holeCenterY),
                         style = Stroke(width = ringThickness)
                     )
-                    // Battery progress arc
                     drawArc(
                         color = batteryColor,
                         startAngle = -90f,
@@ -342,35 +419,56 @@ fun AodClockAndWidgetsContent(
     recentNotifications: List<NotificationLogEntity>,
     pixelShiftOffsetX: Float,
     pixelShiftOffsetY: Float,
+    tiltNormalizedX: Float = 0f,
+    tiltNormalizedY: Float = 0f,
     modifier: Modifier = Modifier
 ) {
+    // High-refresh ticker (updates every 80ms for smooth 2026 sub-second sweep & fluid transitions)
     var currentMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
             currentMillis = System.currentTimeMillis()
-            delay(1000L)
+            delay(80L)
         }
     }
 
-    val dateObj = remember(currentMillis) { Date(currentMillis) }
-    val hourStr = remember(currentMillis) { SimpleDateFormat("HH", Locale.getDefault()).format(dateObj) }
-    val minStr = remember(currentMillis) { SimpleDateFormat("mm", Locale.getDefault()).format(dateObj) }
-    val secStr = remember(currentMillis) { SimpleDateFormat("ss", Locale.getDefault()).format(dateObj) }
-    val dateLineRu = remember(currentMillis) {
+    val dateObj = remember(currentMillis / 1000L) { Date(currentMillis) }
+    val hourStr = remember(currentMillis / 1000L) { SimpleDateFormat("HH", Locale.getDefault()).format(dateObj) }
+    val minStr = remember(currentMillis / 1000L) { SimpleDateFormat("mm", Locale.getDefault()).format(dateObj) }
+    val secStr = remember(currentMillis / 1000L) { SimpleDateFormat("ss", Locale.getDefault()).format(dateObj) }
+    val subSecFraction = ((currentMillis % 1000L) / 1000f)
+    val dateLineRu = remember(currentMillis / 10000L) {
         SimpleDateFormat("EEE, d MMMM", Locale("ru")).format(dateObj).uppercase(Locale("ru"))
     }
 
-    val shiftX = if (config.pixelShiftEnabled) pixelShiftOffsetX.dp else 0.dp
-    val shiftY = if (config.pixelShiftEnabled) pixelShiftOffsetY.dp else 0.dp
+    val parallaxDx by animateFloatAsState(
+        targetValue = if (config.parallax3dEnabled) tiltNormalizedX * 10f * config.parallaxIntensity else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
+        label = "parallaxDx"
+    )
+    val parallaxDy by animateFloatAsState(
+        targetValue = if (config.parallax3dEnabled) tiltNormalizedY * 8f * config.parallaxIntensity else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
+        label = "parallaxDy"
+    )
+
+    val shiftX = ((if (config.pixelShiftEnabled) pixelShiftOffsetX else 0f) + parallaxDx).dp
+    val shiftY = ((if (config.pixelShiftEnabled) pixelShiftOffsetY else 0f) + parallaxDy).dp
 
     Column(
         modifier = modifier
             .offset(x = shiftX, y = shiftY)
+            .graphicsLayer {
+                if (config.parallax3dEnabled) {
+                    rotationY = tiltNormalizedX * 7f * config.parallaxIntensity
+                    rotationX = -tiltNormalizedY * 6f * config.parallaxIntensity
+                }
+            }
             .alpha(config.aodBrightness)
             .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Selected Clock Face Renderer
+        // Selected Clock Face Renderer (2026 Fluid Edition)
         ClockFaceShowcase(
             style = config.clockStyle,
             palette = config.palette,
@@ -378,6 +476,7 @@ fun AodClockAndWidgetsContent(
             hourStr = hourStr,
             minStr = minStr,
             secStr = secStr,
+            subSecFraction = subSecFraction,
             showSeconds = config.showSeconds
         )
 
@@ -422,20 +521,23 @@ fun AodClockAndWidgetsContent(
             )
         }
 
-        // Notification Icons Row on AOD
-        if (config.showNotificationBadges && recentNotifications.isNotEmpty()) {
+        // Allowed Notification Icons Row on AOD (excludes blocked items)
+        val allowedNotifications = remember(recentNotifications) {
+            recentNotifications.filter { !it.wasBlockedByFilter }
+        }
+        if (config.showNotificationBadges && allowedNotifications.isNotEmpty()) {
             Spacer(modifier = Modifier.height(10.dp))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                recentNotifications.take(4).forEach { item ->
+                allowedNotifications.take(4).forEach { item ->
                     val badgeColor = Color(item.colorHex)
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(badgeColor.copy(alpha = 0.16f))
-                            .border(1.dp, badgeColor.copy(alpha = 0.75f), CircleShape)
+                            .border(1.dp, badgeColor.copy(alpha = 0.78f), CircleShape)
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -469,42 +571,66 @@ private fun ClockFaceShowcase(
     hourStr: String,
     minStr: String,
     secStr: String,
+    subSecFraction: Float,
     showSeconds: Boolean
 ) {
     val primary = palette.primaryColor
     val secondary = palette.secondaryColor
     val accent = palette.accentColor
 
+    val infiniteTransition = rememberInfiniteTransition(label = "clock_face_2026")
+    val liquidPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 4200, easing = LinearEasing)
+        ),
+        label = "liquidPhase"
+    )
+
     when (style) {
         ClockFaceStyle.CYBER_PULSE -> {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(verticalAlignment = Alignment.Bottom) {
+                Box(contentAlignment = Alignment.Center) {
+                    // Subtle Holographic Shadow Layer
                     Text(
                         text = "$hourStr:$minStr",
                         fontFamily = OrbitronFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = (42 * scale).sp,
-                        color = primary,
-                        letterSpacing = 2.sp
+                        color = secondary.copy(alpha = 0.28f),
+                        letterSpacing = 2.sp,
+                        modifier = Modifier.offset(x = 2.dp, y = 2.dp)
                     )
-                    if (showSeconds) {
-                        Spacer(modifier = Modifier.width(6.dp))
+                    Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            text = secStr,
-                            fontFamily = ShareTechMonoFontFamily,
-                            fontSize = (18 * scale).sp,
-                            color = secondary,
-                            modifier = Modifier.padding(bottom = 6.dp)
+                            text = "$hourStr:$minStr",
+                            fontFamily = OrbitronFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = (42 * scale).sp,
+                            color = primary,
+                            letterSpacing = 2.sp
                         )
+                        if (showSeconds) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = secStr,
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontSize = (18 * scale).sp,
+                                color = secondary,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+                        }
                     }
                 }
                 Box(
                     modifier = Modifier
-                        .width((120 * scale).dp)
-                        .height(2.dp)
+                        .width((132 * scale).dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(50))
                         .background(
                             Brush.horizontalGradient(
-                                listOf(Color.Transparent, primary, secondary, Color.Transparent)
+                                listOf(Color.Transparent, primary, secondary, accent, Color.Transparent)
                             )
                         )
                 )
@@ -515,7 +641,8 @@ private fun ClockFaceShowcase(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .border(1.dp, PureWhite.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
+                    .border(1.dp, PureWhite.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+                    .background(Color(0xFF070A10).copy(alpha = 0.6f), RoundedCornerShape(14.dp))
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -527,7 +654,7 @@ private fun ClockFaceShowcase(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "NOTHING // GLYPH OS",
+                        text = "NOTHING // GLYPH 3.0",
                         fontFamily = ShareTechMonoFontFamily,
                         fontSize = 10.sp,
                         color = MutedSlate,
@@ -559,46 +686,52 @@ private fun ClockFaceShowcase(
                     fontFamily = OrbitronFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = (44 * scale).sp,
-                    color = PureWhite.copy(alpha = 0.9f),
+                    color = PureWhite.copy(alpha = 0.92f),
                     lineHeight = (44 * scale).sp
                 )
             }
         }
 
         ClockFaceStyle.COSMIC_ORBIT_SPHERE -> {
-            val infiniteTransition = rememberInfiniteTransition(label = "orbit")
-            val orbitAngle by infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = 360f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 6000, easing = LinearEasing)
-                ),
-                label = "orbitAngle"
-            )
             Box(
-                modifier = Modifier.size((134 * scale).dp),
+                modifier = Modifier.size((138 * scale).dp),
                 contentAlignment = Alignment.Center
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val r = size.minDimension / 2f
                     drawCircle(
                         brush = Brush.radialGradient(
-                            colors = listOf(primary.copy(alpha = 0.28f), secondary.copy(alpha = 0.1f), Color.Transparent)
+                            colors = listOf(
+                                primary.copy(alpha = 0.34f),
+                                secondary.copy(alpha = 0.14f),
+                                Color.Transparent
+                            )
                         ),
                         radius = r
                     )
                     drawCircle(
                         color = primary.copy(alpha = 0.55f),
-                        radius = r * 0.85f,
+                        radius = r * 0.86f,
                         style = Stroke(width = 1.5.dp.toPx())
                     )
-                    val rad = (orbitAngle * PI / 180.0).toFloat()
-                    val satX = center.x + cos(rad) * (r * 0.85f)
-                    val satY = center.y + sin(rad) * (r * 0.85f)
+                    drawCircle(
+                        color = secondary.copy(alpha = 0.35f),
+                        radius = r * 0.68f,
+                        style = Stroke(width = 1.dp.toPx())
+                    )
+                    val satX = center.x + cos(liquidPhase) * (r * 0.86f)
+                    val satY = center.y + sin(liquidPhase) * (r * 0.86f)
                     drawCircle(
                         color = secondary,
-                        radius = 4.5.dp.toPx(),
+                        radius = 5.dp.toPx(),
                         center = Offset(satX, satY)
+                    )
+                    val sat2X = center.x + cos(-liquidPhase * 1.4f) * (r * 0.68f)
+                    val sat2Y = center.y + sin(-liquidPhase * 1.4f) * (r * 0.68f)
+                    drawCircle(
+                        color = primary,
+                        radius = 3.5.dp.toPx(),
+                        center = Offset(sat2X, sat2Y)
                     )
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -624,20 +757,31 @@ private fun ClockFaceShowcase(
         ClockFaceStyle.AURORA_METABALLS -> {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                primary.copy(alpha = 0.20f),
-                                secondary.copy(alpha = 0.18f),
-                                accent.copy(alpha = 0.20f)
-                            )
-                        )
-                    )
-                    .border(1.dp, primary.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
-                    .padding(horizontal = 22.dp, vertical = 10.dp),
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(Color(0xFF060A12))
+                    .border(1.2.dp, primary.copy(alpha = 0.55f), RoundedCornerShape(26.dp))
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
+                // Animated organic metaball blobs behind the clock text
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val b1x = size.width * (0.3f + 0.25f * sin(liquidPhase))
+                    val b2x = size.width * (0.7f + 0.25f * cos(liquidPhase))
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(primary.copy(alpha = 0.42f), Color.Transparent)
+                        ),
+                        radius = size.height * 0.75f,
+                        center = Offset(b1x, size.height * 0.5f)
+                    )
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(secondary.copy(alpha = 0.38f), Color.Transparent)
+                        ),
+                        radius = size.height * 0.7f,
+                        center = Offset(b2x, size.height * 0.5f)
+                    )
+                }
                 Text(
                     text = if (showSeconds) "$hourStr·$minStr·$secStr" else "$hourStr·$minStr",
                     fontFamily = OrbitronFontFamily,
@@ -662,17 +806,18 @@ private fun ClockFaceShowcase(
                 )
                 FlipCardTile(text = minStr, accent = secondary, scale = scale)
                 if (showSeconds) {
-                    FlipCardTile(text = secStr, accent = accent, scale = scale * 0.72f)
+                    FlipCardTile(text = secStr, accent = accent, scale = scale * 0.74f)
                 }
             }
         }
 
         ClockFaceStyle.SWISS_CHRONOGRAPH -> {
             val secInt = secStr.toIntOrNull() ?: 0
+            val smoothSeconds = secInt + subSecFraction
             val minInt = minStr.toIntOrNull() ?: 0
             val hourInt = hourStr.toIntOrNull() ?: 0
             Box(
-                modifier = Modifier.size((124 * scale).dp),
+                modifier = Modifier.size((128 * scale).dp),
                 contentAlignment = Alignment.Center
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -711,7 +856,7 @@ private fun ClockFaceShowcase(
                         cap = StrokeCap.Round
                     )
                     // Minute hand
-                    val mAngle = (minInt * 6f - 90f) * (PI / 180f)
+                    val mAngle = ((minInt + smoothSeconds / 60f) * 6f - 90f) * (PI / 180f)
                     drawLine(
                         color = primary,
                         start = center,
@@ -722,17 +867,17 @@ private fun ClockFaceShowcase(
                         strokeWidth = 2.5.dp.toPx(),
                         cap = StrokeCap.Round
                     )
-                    // Second hand
+                    // 120Hz Continuous Sweep Second Hand
                     if (showSeconds) {
-                        val sAngle = (secInt * 6f - 90f) * (PI / 180f)
+                        val sAngle = (smoothSeconds * 6f - 90f) * (PI / 180f)
                         drawLine(
                             color = secondary,
                             start = center,
                             end = Offset(
-                                center.x + (cos(sAngle) * radius * 0.82f).toFloat(),
-                                center.y + (sin(sAngle) * radius * 0.82f).toFloat()
+                                center.x + (cos(sAngle) * radius * 0.84f).toFloat(),
+                                center.y + (sin(sAngle) * radius * 0.84f).toFloat()
                             ),
-                            strokeWidth = 1.5.dp.toPx(),
+                            strokeWidth = 1.6.dp.toPx(),
                             cap = StrokeCap.Round
                         )
                     }
@@ -742,7 +887,7 @@ private fun ClockFaceShowcase(
                     text = "$hourStr:$minStr",
                     fontFamily = ShareTechMonoFontFamily,
                     fontSize = 11.sp,
-                    color = PureWhite.copy(alpha = 0.7f),
+                    color = PureWhite.copy(alpha = 0.75f),
                     modifier = Modifier.offset(y = (26 * scale).dp)
                 )
             }
@@ -753,12 +898,12 @@ private fun ClockFaceShowcase(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .clip(RoundedCornerShape(14.dp))
-                    .background(ObsidianCard.copy(alpha = 0.55f))
-                    .border(1.dp, secondary.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
+                    .background(ObsidianCard.copy(alpha = 0.65f))
+                    .border(1.dp, secondary.copy(alpha = 0.65f), RoundedCornerShape(14.dp))
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text(
-                    text = "SYNTH // AMOLED 84",
+                    text = "SYNTH // HOLOGRAM 2026",
                     fontFamily = ShareTechMonoFontFamily,
                     fontSize = 9.sp,
                     color = secondary,
@@ -786,7 +931,7 @@ private fun FlipCardTile(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF0E131D))
-            .border(1.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+            .border(1.dp, accent.copy(alpha = 0.65f), RoundedCornerShape(10.dp))
             .padding(horizontal = (12 * scale).dp, vertical = (6 * scale).dp),
         contentAlignment = Alignment.Center
     ) {
@@ -812,7 +957,7 @@ fun AodWeatherWidgetView(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(Color(0xFF0D131F))
-                    .border(1.dp, primaryColor.copy(alpha = 0.4f), RoundedCornerShape(50))
+                    .border(1.dp, primaryColor.copy(alpha = 0.45f), RoundedCornerShape(50))
                     .padding(horizontal = 12.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -845,7 +990,7 @@ fun AodWeatherWidgetView(
                     .fillMaxWidth(0.92f)
                     .clip(RoundedCornerShape(14.dp))
                     .background(Color(0xFF0A0F18))
-                    .border(1.dp, primaryColor.copy(alpha = 0.32f), RoundedCornerShape(14.dp))
+                    .border(1.dp, primaryColor.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
                     .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
                 Row(

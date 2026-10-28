@@ -1,7 +1,5 @@
 package com.example.ui.screens
 
-import android.content.Intent
-import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,12 +18,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.SyncAlt
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -35,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -47,7 +50,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AodConfigurationState
+import com.example.model.SystemPermissionStatus
 import com.example.service.HardwareTelemetryState
+import com.example.service.LuminaPermissionHelper
 import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.EnergyEmerald
 import com.example.ui.theme.MatrixRed
@@ -65,6 +70,13 @@ import com.example.ui.theme.SolarAmber
 fun BatteryAndDeepSleepSection(
     config: AodConfigurationState,
     telemetry: HardwareTelemetryState,
+    permissionStatus: SystemPermissionStatus,
+    onRefreshPermissionsAndRestart: () -> Unit,
+    onRequestPostNotificationPermission: () -> Unit,
+    onToggleAutoWakeOnNotification: (Boolean) -> Unit,
+    onToggleAutoWakeOnCharging: (Boolean) -> Unit,
+    onToggleAutoShowOnScreenOff: (Boolean) -> Unit,
+    onToggleSystemOverlay: (Boolean) -> Unit,
     onToggleProximityPocket: (Boolean) -> Unit,
     onTogglePocketSimulation: () -> Unit,
     onTogglePixelShift: (Boolean) -> Unit,
@@ -85,7 +97,130 @@ fun BatteryAndDeepSleepSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Live AMOLED Power & Hardware Telemetry Dashboard
+        // 1. System Permissions & Event Triggers Diagnostics Hub
+        SectionHeaderRow(
+            icon = Icons.Default.VerifiedUser,
+            title = "Центр Разрешений и Служб Android",
+            badgeText = "${permissionStatus.grantedCount}/4 Выдано"
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+            border = BorderStroke(
+                1.2.dp,
+                if (permissionStatus.allCriticalGranted) EnergyEmerald.copy(alpha = 0.6f)
+                else SolarAmber.copy(alpha = 0.7f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Для автоматической работы AOD, перехвата уведомлений и показа Динамического Острова поверх всех окон проверьте выдачу 4 системных разрешений:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontSize = 12.sp,
+                    color = MutedSlate
+                )
+
+                PermissionCheckRow(
+                    title = "1. Доступ к уведомлениям (Notification Listener)",
+                    subtitle = "Обязательно для перехвата пушей мессенджеров, музыки и звонков",
+                    isGranted = permissionStatus.hasNotificationListenerAccess,
+                    actionLabel = "Включить",
+                    onActionClick = { LuminaPermissionHelper.openNotificationListenerSettings(context) },
+                    testTag = "perm_notification_listener_btn"
+                )
+
+                PermissionCheckRow(
+                    title = "2. Наложение поверх других окон (System Overlay)",
+                    subtitle = "Позволяет показывать плавающий Остров поверх любых приложений и блокировки",
+                    isGranted = permissionStatus.hasOverlayPermission,
+                    actionLabel = "Разрешить",
+                    onActionClick = { LuminaPermissionHelper.openOverlayPermissionSettings(context) },
+                    testTag = "perm_overlay_btn"
+                )
+
+                PermissionCheckRow(
+                    title = "3. Показ уведомлений и шторки (POST_NOTIFICATIONS)",
+                    subtitle = "Требуется для закрепленного пульта управления и фоновой службы",
+                    isGranted = permissionStatus.hasPostNotificationsPermission,
+                    actionLabel = "Запросить",
+                    onActionClick = onRequestPostNotificationPermission,
+                    testTag = "perm_post_notif_btn"
+                )
+
+                PermissionCheckRow(
+                    title = "4. Работа в фоне без ограничений батареи",
+                    subtitle = "Защищает службу AOD от выгрузки системой при выключении экрана",
+                    isGranted = permissionStatus.isIgnoringBatteryOptimizations,
+                    actionLabel = "Отключить лимит",
+                    onActionClick = { LuminaPermissionHelper.requestIgnoreBatteryOptimizations(context) },
+                    testTag = "perm_battery_opt_btn"
+                )
+
+                Button(
+                    onClick = onRefreshPermissionsAndRestart,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CyberCyan,
+                        contentColor = PitchBlack
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("restart_and_verify_services_button")
+                ) {
+                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Проверить разрешения и перезапустить службы AOD",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Автоматическая реакция на события:",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 14.sp,
+                    color = PureWhite
+                )
+
+                SettingToggleRow(
+                    title = "Авто-пробуждение AOD при получении пуша",
+                    subtitle = "Включает экран Always On Display и раскрывает Остров при новом сообщении",
+                    checked = config.autoWakeOnNotification,
+                    onCheckedChange = onToggleAutoWakeOnNotification,
+                    testTag = "toggle_auto_wake_notif"
+                )
+
+                SettingToggleRow(
+                    title = "Автозапуск AOD при выключении экрана (Screen Off)",
+                    subtitle = "Мгновенно активирует циферблат при нажатии кнопки блокировки",
+                    checked = config.autoShowOnScreenOff,
+                    onCheckedChange = onToggleAutoShowOnScreenOff
+                )
+
+                SettingToggleRow(
+                    title = "Анимация Turbo-зарядки при подключении кабеля",
+                    subtitle = "Автоматически пробуждает Остров с индикатором тока при зарядке",
+                    checked = config.autoWakeOnCharging,
+                    onCheckedChange = onToggleAutoWakeOnCharging
+                )
+
+                SettingToggleRow(
+                    title = "Системный оверлей Острова поверх всех приложений",
+                    subtitle = "Показывать всплывающий Динамический Остров поверх открытых программ",
+                    checked = config.systemOverlayEnabled,
+                    onCheckedChange = onToggleSystemOverlay
+                )
+            }
+        }
+
+        // 2. Live AMOLED Power & Hardware Telemetry Dashboard
         SectionHeaderRow(
             icon = Icons.Default.BatterySaver,
             title = "Энергопотребление AMOLED и Телеметрия",
@@ -162,7 +297,7 @@ fun BatteryAndDeepSleepSection(
             }
         }
 
-        // 2. Deep Sleep Mode & Night Schedule
+        // 3. Deep Sleep Mode & Night Schedule
         SectionHeaderRow(
             icon = Icons.Default.Bedtime,
             title = "Режим Глубокого сна (Deep Sleep)",
@@ -248,7 +383,7 @@ fun BatteryAndDeepSleepSection(
             }
         }
 
-        // 3. Proximity Sensor, Wake Gestures & Burn-in Protection
+        // 4. Proximity Sensor, Wake Gestures & Burn-in Protection
         SectionHeaderRow(
             icon = Icons.Default.Security,
             title = "Защита AMOLED от выгорания и Датчики",
@@ -351,7 +486,7 @@ fun BatteryAndDeepSleepSection(
             }
         }
 
-        // 4. Quick Settings Tile & Notification Shade Control Panel
+        // 5. Quick Settings Tile & Notification Shade Control Panel
         SectionHeaderRow(
             icon = Icons.Default.GridView,
             title = "Быстрая панель в шторке уведомлений",
@@ -376,7 +511,6 @@ fun BatteryAndDeepSleepSection(
                     testTag = "toggle_shade_quick_panel"
                 )
 
-                // Interactive in-app mirror of the Notification Shade Quick Bar
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -433,13 +567,7 @@ fun BatteryAndDeepSleepSection(
                 }
 
                 OutlinedButton(
-                    onClick = {
-                        runCatching {
-                            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(intent)
-                        }
-                    },
+                    onClick = { LuminaPermissionHelper.openAppDetailsSettings(context) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -451,12 +579,83 @@ fun BatteryAndDeepSleepSection(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Системный доступ к уведомлениям (Android Settings)",
+                        text = "Системные свойства приложения (Все разрешения)",
                         color = PureWhite,
                         fontSize = 12.sp
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PermissionCheckRow(
+    title: String,
+    subtitle: String,
+    isGranted: Boolean,
+    actionLabel: String,
+    onActionClick: () -> Unit,
+    testTag: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF0E1420))
+            .border(
+                1.dp,
+                if (isGranted) EnergyEmerald.copy(alpha = 0.45f) else SolarAmber.copy(alpha = 0.55f),
+                RoundedCornerShape(14.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.WarningAmber,
+                contentDescription = null,
+                tint = if (isGranted) EnergyEmerald else SolarAmber,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PureWhite
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontSize = 10.sp,
+                    color = MutedSlate
+                )
+            }
+        }
+
+        Surface(
+            onClick = onActionClick,
+            shape = RoundedCornerShape(50),
+            color = if (isGranted) EnergyEmerald.copy(alpha = 0.16f) else SolarAmber,
+            modifier = Modifier.testTag(testTag)
+        ) {
+            Text(
+                text = if (isGranted) "Выдано" else actionLabel,
+                fontFamily = ShareTechMonoFontFamily,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isGranted) EnergyEmerald else PitchBlack,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+            )
         }
     }
 }

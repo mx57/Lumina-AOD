@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdded
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.WatchLater
 import androidx.compose.material3.Button
@@ -35,6 +36,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -71,6 +73,7 @@ import com.example.ui.theme.ObsidianCard
 import com.example.ui.theme.PitchBlack
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.ShareTechMonoFontFamily
+import com.example.ui.theme.SolarAmber
 
 @Composable
 fun StudioCustomizationSection(
@@ -86,6 +89,12 @@ fun StudioCustomizationSection(
     onToggleShowSeconds: (Boolean) -> Unit,
     onToggleShowWeather: (Boolean) -> Unit,
     onToggleShowBadges: (Boolean) -> Unit,
+    onToggleParallax3d: (Boolean) -> Unit,
+    onParallaxIntensityChange: (Float) -> Unit,
+    onToggleLiquidMetaball: (Boolean) -> Unit,
+    onAnimationSpeedChange: (Float) -> Unit,
+    onToggleEdgeParticles: (Boolean) -> Unit,
+    onSimulateTiltPreview: (Float, Float) -> Unit,
     onApplyPreset: (AodPresetEntity) -> Unit,
     onSavePreset: (String) -> Unit,
     onDeletePreset: (Int) -> Unit
@@ -104,7 +113,7 @@ fun StudioCustomizationSection(
         // 1. Saved Presets Carousel (Muviz / Nothing / DynamicSpot / Energy Ring)
         SectionHeaderRow(
             icon = Icons.Default.BookmarkAdded,
-            title = "Готовые пресеты и коллекция",
+            title = "Готовые пресеты и коллекция 2026",
             badgeText = "${presets.size} стилей"
         )
 
@@ -118,7 +127,7 @@ fun StudioCustomizationSection(
                 val palette = AodColorPalette.fromId(preset.paletteId)
                 Card(
                     modifier = Modifier
-                        .width(205.dp)
+                        .width(210.dp)
                         .clickable { onApplyPreset(preset) }
                         .testTag("preset_card_${preset.id}"),
                     shape = RoundedCornerShape(18.dp),
@@ -319,7 +328,7 @@ fun StudioCustomizationSection(
         // 3. Edge Lighting Animations (Muviz Edge)
         SectionHeaderRow(
             icon = Icons.Default.AutoAwesome,
-            title = "Свечение краев экрана (Edge Lighting)",
+            title = "Свечение краев экрана 120Hz (Edge Lighting)",
             badgeText = config.edgeStyle.titleRu
         )
 
@@ -419,7 +428,101 @@ fun StudioCustomizationSection(
             }
         }
 
-        // 5. Fine-Tuning Sliders & Toggles
+        // 5. 2026 Motion Physics, 3D Gyro Parallax & Shader Particles
+        SectionHeaderRow(
+            icon = Icons.Default.Animation,
+            title = "Физика 2026: 3D-Параллакс, Метаболы и 120Hz",
+            badgeText = "Скорость ${String.format("%.1f", config.animationSpeedMultiplier)}x"
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+            border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.45f))
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SettingToggleRow(
+                    title = "3D-Параллакс от гироскопа / акселерометра",
+                    subtitle = "Объемное смещение часов и Острова при наклоне телефона",
+                    checked = config.parallax3dEnabled,
+                    onCheckedChange = onToggleParallax3d,
+                    testTag = "toggle_parallax_3d"
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Глубина 3D-параллакса", color = PureWhite, fontSize = 13.sp)
+                    Text("${(config.parallaxIntensity * 100).toInt()}%", fontFamily = ShareTechMonoFontFamily, color = CyberCyan)
+                }
+                Slider(
+                    value = config.parallaxIntensity,
+                    onValueChange = onParallaxIntensityChange,
+                    valueRange = 0.2f..1.4f,
+                    colors = SliderDefaults.colors(thumbColor = CyberCyan, activeTrackColor = CyberCyan)
+                )
+
+                // Interactive Tilt Simulator Buttons for instant visual verification
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { onSimulateTiltPreview(-0.85f, 0.4f) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Наклон Влево", fontSize = 10.sp, color = CyberCyan)
+                    }
+                    OutlinedButton(
+                        onClick = { onSimulateTiltPreview(0f, 0f) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Центр (0°)", fontSize = 10.sp, color = PureWhite)
+                    }
+                    OutlinedButton(
+                        onClick = { onSimulateTiltPreview(0.85f, -0.4f) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Наклон Вправо", fontSize = 10.sp, color = CyberCyan)
+                    }
+                }
+
+                SettingToggleRow(
+                    title = "Жидкий морфинг метаболов (Liquid Morph)",
+                    subtitle = "Вязкое слияние капли Острова и органических сфер",
+                    checked = config.liquidMetaballMorphEnabled,
+                    onCheckedChange = onToggleLiquidMetaball
+                )
+
+                SettingToggleRow(
+                    title = "Волновые шейдерные частицы по краям",
+                    subtitle = "Парящие неоновые искры вдоль граней экрана",
+                    checked = config.edgeParticleSparksEnabled,
+                    onCheckedChange = onToggleEdgeParticles
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Скорость анимаций и волн", color = PureWhite, fontSize = 13.sp)
+                    Text("${String.format("%.1f", config.animationSpeedMultiplier)}x", fontFamily = ShareTechMonoFontFamily, color = SolarAmber)
+                }
+                Slider(
+                    value = config.animationSpeedMultiplier,
+                    onValueChange = onAnimationSpeedChange,
+                    valueRange = 0.5f..2.0f,
+                    colors = SliderDefaults.colors(thumbColor = SolarAmber, activeTrackColor = SolarAmber)
+                )
+            }
+        }
+
+        // 6. Fine-Tuning Sliders & Toggles
         SectionHeaderRow(
             icon = Icons.Default.Tune,
             title = "Тонкая калибровка матрицы",
@@ -454,7 +557,7 @@ fun StudioCustomizationSection(
                 Slider(
                     value = config.clockScale,
                     onValueChange = onClockScaleChange,
-                    valueRange = 0.75f..1.30f,
+                    valueRange = 0.75f..1.35f,
                     colors = SliderDefaults.colors(
                         thumbColor = CyberCyan,
                         activeTrackColor = CyberCyan
@@ -487,8 +590,8 @@ fun StudioCustomizationSection(
                 )
 
                 SettingToggleRow(
-                    title = "Показывать секунды в реальном времени",
-                    subtitle = "Плавный отсчет секунд и секундной стрелки",
+                    title = "Показывать секунды в реальном времени (120Hz)",
+                    subtitle = "Плавный отсчет секунд и непрерывный ход секундной стрелки",
                     checked = config.showSeconds,
                     onCheckedChange = onToggleShowSeconds
                 )
@@ -500,7 +603,7 @@ fun StudioCustomizationSection(
                 )
                 SettingToggleRow(
                     title = "Неоновые бейджи уведомлений",
-                    subtitle = "Показывать цветные капсулы непрочитанных приложений",
+                    subtitle = "Показывать цветные капсулы разрешенных приложений",
                     checked = config.showNotificationBadges,
                     onCheckedChange = onToggleShowBadges
                 )
@@ -520,7 +623,10 @@ fun SectionHeaderRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
@@ -534,6 +640,7 @@ fun SectionHeaderRow(
                 color = PureWhite
             )
         }
+        Spacer(modifier = Modifier.width(8.dp))
         Box(
             modifier = Modifier
                 .clip(CircleShape)

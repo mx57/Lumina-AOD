@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,19 +15,26 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.CameraFront
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.OpenWith
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.SmartButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,15 +58,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.AppColorRuleEntity
 import com.example.data.NotificationLogEntity
 import com.example.model.AodConfigurationState
 import com.example.model.CameraRingMode
 import com.example.model.IslandActivityType
+import com.example.model.IslandAnchorPreset
+import com.example.model.IslandShapeStyle
 import com.example.ui.theme.CyberCyan
-import com.example.ui.theme.ElectricViolet
 import com.example.ui.theme.EnergyEmerald
-import com.example.ui.theme.IceBlue
 import com.example.ui.theme.MatrixRed
 import com.example.ui.theme.MutedSlate
 import com.example.ui.theme.NeonMagenta
@@ -72,29 +79,24 @@ import com.example.ui.theme.SolarAmber
 @Composable
 fun IslandAndCameraRingSection(
     config: AodConfigurationState,
-    appColorRules: List<AppColorRuleEntity>,
     recentNotifications: List<NotificationLogEntity>,
     onToggleDynamicIsland: (Boolean) -> Unit,
+    onSelectIslandShape: (IslandShapeStyle) -> Unit,
+    onSelectIslandAnchor: (IslandAnchorPreset) -> Unit,
+    onToggleIslandFreeDrag: (Boolean) -> Unit,
+    onToggleIslandMagneticSnap: (Boolean) -> Unit,
+    onSetIslandExactOffset: (Float, Float) -> Unit,
+    onResetIslandPositionToCamera: () -> Unit,
+    onUpdateIslandVisualSettings: (Float, Float, Float, Float, Float, Float, Float) -> Unit,
     onToggleCameraRing: (Boolean) -> Unit,
     onSelectRingMode: (CameraRingMode) -> Unit,
     onUpdateCameraGeometry: (Float, Float, Float, Float) -> Unit,
     onSelectIslandActivity: (IslandActivityType) -> Unit,
     onToggleIslandExpanded: () -> Unit,
     onSendCustomQuickReply: (String) -> Unit,
-    onTriggerSimulatedAppPush: (AppColorRuleEntity) -> Unit,
-    onUpdateAppRuleColor: (AppColorRuleEntity, Long) -> Unit,
     onClearNotifications: () -> Unit
 ) {
     var customReplyText by remember { mutableStateOf("") }
-    val selectableColorHexes = listOf(
-        0xFF38BDF8L,
-        0xFF00E676L,
-        0xFF00F5D4L,
-        0xFFFF2A85L,
-        0xFFFFB800L,
-        0xFF7B61FFL,
-        0xFFFF3B30L
-    )
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -103,8 +105,8 @@ fun IslandAndCameraRingSection(
         // 1. Dynamic Island Interactive Multitasking Hub
         SectionHeaderRow(
             icon = Icons.Default.SmartButton,
-            title = "Интерактивный Динамический Остров",
-            badgeText = if (config.isIslandExpanded) "Развернут" else "Компактный"
+            title = "Динамический Остров 2026 (120Hz)",
+            badgeText = config.islandShape.titleRu
         )
 
         Card(
@@ -118,15 +120,15 @@ fun IslandAndCameraRingSection(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 SettingToggleRow(
-                    title = "Включить Динамический остров (dynamicSpot Pro)",
-                    subtitle = "Интерактивная капсула вокруг камеры с мультизадачностью",
+                    title = "Включить Динамический Остров (dynamicSpot Pro)",
+                    subtitle = "Жидкая капсула 120Hz с мультизадачностью и перемещением пальцем",
                     checked = config.isDynamicIslandEnabled,
                     onCheckedChange = onToggleDynamicIsland,
                     testTag = "toggle_dynamic_island"
                 )
 
                 Text(
-                    text = "Активный сценарий Острова (нажмите для проверки в превью):",
+                    text = "Сценарий Острова (нажмите для проверки в превью):",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MutedSlate
                 )
@@ -219,7 +221,333 @@ fun IslandAndCameraRingSection(
             }
         }
 
-        // 2. Camera Cutout Ring (aodNotify + Energy Ring)
+        // 2. 6 Geometric Shapes & Position / Drag-and-Drop Constructor
+        SectionHeaderRow(
+            icon = Icons.Default.OpenWith,
+            title = "Форма и Положение Острова (Drag & Drop)",
+            badgeText = "X:${config.islandOffsetXDp} Y:${config.islandOffsetYDp}dp"
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+            border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.45f))
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Выберите гео-форму Динамического Острова (6 форм):",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 14.sp,
+                    color = PureWhite
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IslandShapeStyle.entries.chunked(2).forEach { rowShapes ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowShapes.forEach { shapeItem ->
+                                val selected = config.islandShape == shapeItem
+                                Card(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { onSelectIslandShape(shapeItem) }
+                                        .testTag("island_shape_${shapeItem.id}"),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selected) Color(0xFF14283E) else Color(0xFF0E1420)
+                                    ),
+                                    border = BorderStroke(
+                                        width = if (selected) 1.5.dp else 1.dp,
+                                        color = if (selected) CyberCyan else ObsidianBorder
+                                    )
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Text(
+                                            text = shapeItem.titleRu,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontSize = 13.sp,
+                                            color = if (selected) CyberCyan else PureWhite
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = shapeItem.subtitleRu,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontSize = 10.sp,
+                                            color = MutedSlate,
+                                            maxLines = 2
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                SettingToggleRow(
+                    title = "Свободное перетаскивание пальцем (Drag-and-Drop)",
+                    subtitle = "Зажмите Остров на превью или экране AOD и двигайте в любую точку",
+                    checked = config.isIslandFreeDragEnabled,
+                    onCheckedChange = onToggleIslandFreeDrag,
+                    testTag = "toggle_island_free_drag"
+                )
+
+                SettingToggleRow(
+                    title = "Магнитная привязка к центру экрана (Snap Grid)",
+                    subtitle = "Автоматически выравнивает Остров при приближении к оси X = 0 dp",
+                    checked = config.islandMagneticSnap,
+                    onCheckedChange = onToggleIslandMagneticSnap
+                )
+
+                Text(
+                    text = "Быстрые точки привязки (Якорь на экране):",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MutedSlate
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IslandAnchorPreset.entries.forEach { anchor ->
+                        val selected = config.islandAnchor == anchor
+                        FilterChip(
+                            selected = selected,
+                            onClick = { onSelectIslandAnchor(anchor) },
+                            label = { Text(anchor.titleRu, fontSize = 11.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = CyberCyan,
+                                selectedLabelColor = PitchBlack
+                            ),
+                            modifier = Modifier.testTag("island_anchor_${anchor.id}")
+                        )
+                    }
+                }
+
+                // Precision X Offset Slider & 0.5dp Stepper
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Позиция Острова X (Горизонталь)", color = PureWhite, fontSize = 13.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        SmallPrecisionStepButton(icon = Icons.Default.Remove) {
+                            onSetIslandExactOffset(config.islandOffsetXDp - 0.5f, config.islandOffsetYDp)
+                        }
+                        Text(
+                            text = "${config.islandOffsetXDp} dp",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 12.sp,
+                            color = CyberCyan
+                        )
+                        SmallPrecisionStepButton(icon = Icons.Default.Add) {
+                            onSetIslandExactOffset(config.islandOffsetXDp + 0.5f, config.islandOffsetYDp)
+                        }
+                    }
+                }
+                Slider(
+                    value = config.islandOffsetXDp,
+                    onValueChange = { onSetIslandExactOffset(it, config.islandOffsetYDp) },
+                    valueRange = -130f..130f,
+                    colors = SliderDefaults.colors(thumbColor = CyberCyan, activeTrackColor = CyberCyan)
+                )
+
+                // Precision Y Offset Slider & 0.5dp Stepper
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Позиция Острова Y (Вертикаль)", color = PureWhite, fontSize = 13.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        SmallPrecisionStepButton(icon = Icons.Default.Remove) {
+                            onSetIslandExactOffset(config.islandOffsetXDp, config.islandOffsetYDp - 0.5f)
+                        }
+                        Text(
+                            text = "${config.islandOffsetYDp} dp",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 12.sp,
+                            color = CyberCyan
+                        )
+                        SmallPrecisionStepButton(icon = Icons.Default.Add) {
+                            onSetIslandExactOffset(config.islandOffsetXDp, config.islandOffsetYDp + 0.5f)
+                        }
+                    }
+                }
+                Slider(
+                    value = config.islandOffsetYDp,
+                    onValueChange = { onSetIslandExactOffset(config.islandOffsetXDp, it) },
+                    valueRange = 2f..250f,
+                    colors = SliderDefaults.colors(thumbColor = CyberCyan, activeTrackColor = CyberCyan)
+                )
+
+                OutlinedButton(
+                    onClick = onResetIslandPositionToCamera,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.RestartAlt,
+                        contentDescription = null,
+                        tint = SolarAmber,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Привязать Остров точно к координатам камеры", color = SolarAmber, fontSize = 12.sp)
+                }
+            }
+        }
+
+        // 3. Deep Visual Customization of Dynamic Island (Size, Opacity, Glow, Spring)
+        SectionHeaderRow(
+            icon = Icons.Default.AutoFixHigh,
+            title = "Глубокая кастомизация и Физика Острова",
+            badgeText = "Свечение ${(config.islandNeonGlowIntensity * 100).toInt()}%"
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+            border = BorderStroke(1.dp, ObsidianBorder)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Width & Height Scale
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Ширина капсулы Острова", color = PureWhite, fontSize = 13.sp)
+                    Text("${(config.islandWidthScale * 100).toInt()}%", fontFamily = ShareTechMonoFontFamily, color = CyberCyan)
+                }
+                Slider(
+                    value = config.islandWidthScale,
+                    onValueChange = {
+                        onUpdateIslandVisualSettings(
+                            it,
+                            config.islandHeightScale,
+                            config.islandCornerRadiusDp,
+                            config.islandGlassOpacity,
+                            config.islandNeonGlowIntensity,
+                            config.islandSpringBounciness,
+                            config.islandBorderWidthDp
+                        )
+                    },
+                    valueRange = 0.72f..1.40f,
+                    colors = SliderDefaults.colors(thumbColor = CyberCyan, activeTrackColor = CyberCyan)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Высота капсулы / Масштаб", color = PureWhite, fontSize = 13.sp)
+                    Text("${(config.islandHeightScale * 100).toInt()}%", fontFamily = ShareTechMonoFontFamily, color = CyberCyan)
+                }
+                Slider(
+                    value = config.islandHeightScale,
+                    onValueChange = {
+                        onUpdateIslandVisualSettings(
+                            config.islandWidthScale,
+                            it,
+                            config.islandCornerRadiusDp,
+                            config.islandGlassOpacity,
+                            config.islandNeonGlowIntensity,
+                            config.islandSpringBounciness,
+                            config.islandBorderWidthDp
+                        )
+                    },
+                    valueRange = 0.75f..1.35f,
+                    colors = SliderDefaults.colors(thumbColor = CyberCyan, activeTrackColor = CyberCyan)
+                )
+
+                // Glass Opacity & Neon Bloom Glow
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Непрозрачность темного стекла", color = PureWhite, fontSize = 13.sp)
+                    Text("${(config.islandGlassOpacity * 100).toInt()}%", fontFamily = ShareTechMonoFontFamily, color = EnergyEmerald)
+                }
+                Slider(
+                    value = config.islandGlassOpacity,
+                    onValueChange = {
+                        onUpdateIslandVisualSettings(
+                            config.islandWidthScale,
+                            config.islandHeightScale,
+                            config.islandCornerRadiusDp,
+                            it,
+                            config.islandNeonGlowIntensity,
+                            config.islandSpringBounciness,
+                            config.islandBorderWidthDp
+                        )
+                    },
+                    valueRange = 0.25f..1.0f,
+                    colors = SliderDefaults.colors(thumbColor = EnergyEmerald, activeTrackColor = EnergyEmerald)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Сила неонового свечения (Shader Bloom)", color = PureWhite, fontSize = 13.sp)
+                    Text("${(config.islandNeonGlowIntensity * 100).toInt()}%", fontFamily = ShareTechMonoFontFamily, color = NeonMagenta)
+                }
+                Slider(
+                    value = config.islandNeonGlowIntensity,
+                    onValueChange = {
+                        onUpdateIslandVisualSettings(
+                            config.islandWidthScale,
+                            config.islandHeightScale,
+                            config.islandCornerRadiusDp,
+                            config.islandGlassOpacity,
+                            it,
+                            config.islandSpringBounciness,
+                            config.islandBorderWidthDp
+                        )
+                    },
+                    valueRange = 0.0f..1.0f,
+                    colors = SliderDefaults.colors(thumbColor = NeonMagenta, activeTrackColor = NeonMagenta)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Упругость пружины 120Hz (Bounciness)", color = PureWhite, fontSize = 13.sp)
+                    Text("${(config.islandSpringBounciness * 100).toInt()}%", fontFamily = ShareTechMonoFontFamily, color = SolarAmber)
+                }
+                Slider(
+                    value = config.islandSpringBounciness,
+                    onValueChange = {
+                        onUpdateIslandVisualSettings(
+                            config.islandWidthScale,
+                            config.islandHeightScale,
+                            config.islandCornerRadiusDp,
+                            config.islandGlassOpacity,
+                            config.islandNeonGlowIntensity,
+                            it,
+                            config.islandBorderWidthDp
+                        )
+                    },
+                    valueRange = 0.30f..1.0f,
+                    colors = SliderDefaults.colors(thumbColor = SolarAmber, activeTrackColor = SolarAmber)
+                )
+            }
+        }
+
+        // 4. Camera Cutout Ring (aodNotify + Energy Ring)
         SectionHeaderRow(
             icon = Icons.Default.CameraFront,
             title = "Кружок вокруг камеры (aodNotify & Energy Ring)",
@@ -287,20 +615,19 @@ fun IslandAndCameraRingSection(
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
-                        text = "Калибровка координат под вырез камеры:",
+                        text = "Калибровка кольца под физический вырез камеры:",
                         style = MaterialTheme.typography.titleMedium,
                         fontSize = 14.sp,
                         color = PureWhite
                     )
                 }
 
-                // X Offset Slider
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Смещение по горизонтали (X)", color = MutedSlate, fontSize = 12.sp)
-                    Text("${config.cameraHoleOffsetXDp.toInt()} dp", fontFamily = ShareTechMonoFontFamily, color = CyberCyan)
+                    Text("Смещение камеры X", color = MutedSlate, fontSize = 12.sp)
+                    Text("${config.cameraHoleOffsetXDp} dp", fontFamily = ShareTechMonoFontFamily, color = CyberCyan)
                 }
                 Slider(
                     value = config.cameraHoleOffsetXDp,
@@ -312,17 +639,16 @@ fun IslandAndCameraRingSection(
                             config.cameraRingThicknessDp
                         )
                     },
-                    valueRange = -70f..70f,
+                    valueRange = -100f..100f,
                     colors = SliderDefaults.colors(thumbColor = CyberCyan, activeTrackColor = CyberCyan)
                 )
 
-                // Y Offset Slider
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Отступ сверху (Y)", color = MutedSlate, fontSize = 12.sp)
-                    Text("${config.cameraHoleOffsetYDp.toInt()} dp", fontFamily = ShareTechMonoFontFamily, color = CyberCyan)
+                    Text("Отступ камеры сверху Y", color = MutedSlate, fontSize = 12.sp)
+                    Text("${config.cameraHoleOffsetYDp} dp", fontFamily = ShareTechMonoFontFamily, color = CyberCyan)
                 }
                 Slider(
                     value = config.cameraHoleOffsetYDp,
@@ -334,11 +660,10 @@ fun IslandAndCameraRingSection(
                             config.cameraRingThicknessDp
                         )
                     },
-                    valueRange = 4f..36f,
+                    valueRange = 2f..50f,
                     colors = SliderDefaults.colors(thumbColor = CyberCyan, activeTrackColor = CyberCyan)
                 )
 
-                // Radius & Thickness Sliders
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -360,108 +685,13 @@ fun IslandAndCameraRingSection(
                             config.cameraRingThicknessDp
                         )
                     },
-                    valueRange = 10f..26f,
+                    valueRange = 8f..28f,
                     colors = SliderDefaults.colors(thumbColor = NeonMagenta, activeTrackColor = NeonMagenta)
                 )
             }
         }
 
-        // 3. Per-App Notification Color Rules & Live Simulator
-        SectionHeaderRow(
-            icon = Icons.Default.NotificationsActive,
-            title = "Индивидуальные цвета приложений",
-            badgeText = "${appColorRules.size} правил"
-        )
-
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            appColorRules.forEach { rule ->
-                val ruleColor = Color(rule.colorHex)
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = ObsidianCard),
-                    border = BorderStroke(1.dp, ruleColor.copy(alpha = 0.45f))
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(14.dp)
-                                        .clip(CircleShape)
-                                        .background(ruleColor)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        text = rule.appDisplayName,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = PureWhite
-                                    )
-                                    Text(
-                                        text = rule.categoryRu,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontSize = 11.sp,
-                                        color = MutedSlate
-                                    )
-                                }
-                            }
-                            Button(
-                                onClick = { onTriggerSimulatedAppPush(rule) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = ruleColor.copy(alpha = 0.22f),
-                                    contentColor = ruleColor
-                                ),
-                                shape = RoundedCornerShape(50),
-                                modifier = Modifier.testTag("simulate_push_${rule.packageName}")
-                            ) {
-                                Text(
-                                    text = "Тест пуша",
-                                    fontFamily = ShareTechMonoFontFamily,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Цвет кольца:",
-                                fontFamily = ShareTechMonoFontFamily,
-                                fontSize = 11.sp,
-                                color = MutedSlate
-                            )
-                            selectableColorHexes.forEach { hex ->
-                                val c = Color(hex)
-                                val isCurrent = rule.colorHex == hex
-                                Box(
-                                    modifier = Modifier
-                                        .size(if (isCurrent) 22.dp else 18.dp)
-                                        .clip(CircleShape)
-                                        .background(c)
-                                        .border(
-                                            width = if (isCurrent) 2.dp else 0.dp,
-                                            color = if (isCurrent) PureWhite else Color.Transparent,
-                                            shape = CircleShape
-                                        )
-                                        .clickable { onUpdateAppRuleColor(rule, hex) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Recent Notification History Log
+        // 5. Recent Notification & Filter History Log
         if (recentNotifications.isNotEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -476,7 +706,7 @@ fun IslandAndCameraRingSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Журнал событий Острова и AOD",
+                            text = "Журнал событий Острова и Фильтрации",
                             style = MaterialTheme.typography.titleMedium,
                             color = PureWhite
                         )
@@ -488,7 +718,7 @@ fun IslandAndCameraRingSection(
                             )
                         }
                     }
-                    recentNotifications.take(5).forEach { log ->
+                    recentNotifications.take(6).forEach { log ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -499,15 +729,20 @@ fun IslandAndCameraRingSection(
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(Color(log.colorHex))
+                                    .background(if (log.wasBlockedByFilter) MatrixRed else Color(log.colorHex))
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 Text(
-                                    text = "${log.appName} • ${log.senderOrTitle}",
+                                    text = buildString {
+                                        append(log.appName)
+                                        append(" • ")
+                                        append(log.senderOrTitle)
+                                        if (log.wasBlockedByFilter) append(" [ЗАБЛОКИРОВАНО]")
+                                    },
                                     fontFamily = ShareTechMonoFontFamily,
                                     fontSize = 11.sp,
-                                    color = Color(log.colorHex)
+                                    color = if (log.wasBlockedByFilter) MatrixRed else Color(log.colorHex)
                                 )
                                 Text(
                                     text = log.messageBody,
@@ -521,5 +756,27 @@ fun IslandAndCameraRingSection(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SmallPrecisionStepButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = Color(0xFF172234),
+        border = BorderStroke(1.dp, ObsidianBorder)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = "Шаг 0.5dp",
+            tint = CyberCyan,
+            modifier = Modifier
+                .padding(4.dp)
+                .size(14.dp)
+        )
     }
 }

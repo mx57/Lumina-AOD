@@ -1,6 +1,7 @@
 package com.example
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -10,12 +11,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,12 +41,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.CameraFront
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.WatchLater
 import androidx.compose.material.icons.outlined.BatterySaver
 import androidx.compose.material.icons.outlined.CameraFront
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -57,6 +65,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -67,17 +76,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.model.EdgeLightingStyle
+import com.example.model.SystemPermissionStatus
+import com.example.service.LuminaPermissionHelper
 import com.example.ui.components.FullScreenLiveAodOverlay
 import com.example.ui.components.InteractiveAmoledPreviewCard
+import com.example.ui.screens.AppFilterRulesSection
 import com.example.ui.screens.BatteryAndDeepSleepSection
 import com.example.ui.screens.IslandAndCameraRingSection
 import com.example.ui.screens.StudioCustomizationSection
@@ -97,15 +113,43 @@ import com.example.ui.theme.SolarAmber
 import com.example.viewmodel.LuminaAodViewModel
 
 class MainActivity : ComponentActivity() {
+
+    private val luminaViewModel: LuminaAodViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        processWakeIntent(intent)
         enableEdgeToEdge()
         setContent {
             LuminaAODTheme {
-                LuminaAodAppRoot()
+                LuminaAodAppRoot(viewModel = luminaViewModel)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        processWakeIntent(intent)
+    }
+
+    private fun processWakeIntent(intent: Intent?) {
+        if (intent == null) return
+        val forceLiveAod = intent.getBooleanExtra(EXTRA_FORCE_LIVE_AOD, false)
+        val expandIsland = intent.getBooleanExtra(EXTRA_EXPAND_ISLAND, false)
+        if (forceLiveAod || expandIsland) {
+            luminaViewModel.handleLaunchIntentExtras(forceLiveAod, expandIsland)
+        }
+    }
+
+    companion object {
+        const val EXTRA_FORCE_LIVE_AOD = "com.example.EXTRA_FORCE_LIVE_AOD"
+        const val EXTRA_EXPAND_ISLAND = "com.example.EXTRA_EXPAND_ISLAND"
     }
 }
 
@@ -113,6 +157,9 @@ class MainActivity : ComponentActivity() {
 fun LuminaAodAppRoot(
     viewModel: LuminaAodViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     val config by viewModel.config.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val isFullScreenAod by viewModel.isFullScreenAodActive.collectAsStateWithLifecycle()
@@ -125,15 +172,30 @@ fun LuminaAodAppRoot(
     val callState by viewModel.callState.collectAsStateWithLifecycle()
     val presets by viewModel.presets.collectAsStateWithLifecycle()
     val appColorRules by viewModel.appColorRules.collectAsStateWithLifecycle()
+    val installedApps by viewModel.installedApps.collectAsStateWithLifecycle()
     val recentNotifications by viewModel.recentNotifications.collectAsStateWithLifecycle()
+    val permissionStatus by viewModel.permissionStatus.collectAsStateWithLifecycle()
     val bannerMessage by viewModel.statusBannerMessage.collectAsStateWithLifecycle()
 
     var currentTab by rememberSaveable { mutableIntStateOf(0) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-        onResult = { /* Handled gracefully */ }
+        onResult = { viewModel.refreshPermissionStatus() }
     )
+
+    // Auto-refresh permission checks whenever user returns from Android Settings
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshPermissionStatus()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -184,6 +246,7 @@ fun LuminaAodAppRoot(
                     val tabs = listOf(
                         Triple(stringResource(R.string.tab_studio), Icons.Default.WatchLater, Icons.Outlined.WatchLater),
                         Triple(stringResource(R.string.tab_island), Icons.Default.CameraFront, Icons.Outlined.CameraFront),
+                        Triple(stringResource(R.string.tab_apps), Icons.Default.FilterList, Icons.Outlined.FilterList),
                         Triple(stringResource(R.string.tab_weather), Icons.Default.Cloud, Icons.Outlined.Cloud),
                         Triple(stringResource(R.string.tab_battery), Icons.Default.BatterySaver, Icons.Outlined.BatterySaver)
                     )
@@ -201,7 +264,7 @@ fun LuminaAodAppRoot(
                             label = {
                                 Text(
                                     text = title,
-                                    fontSize = 11.sp,
+                                    fontSize = 10.sp,
                                     maxLines = 1
                                 )
                             },
@@ -234,9 +297,9 @@ fun LuminaAodAppRoot(
                         top = 12.dp,
                         bottom = 96.dp
                     ),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    // Top Hero Banner & Master Controls
+                    // 1. Top Hero Banner & Master Controls
                     item {
                         LuminaStudioHeaderCard(
                             isAodEnabled = config.isAodEnabled,
@@ -249,7 +312,22 @@ fun LuminaAodAppRoot(
                         )
                     }
 
-                    // Live Notification Toast Banner
+                    // 2. Quick Permissions & Event Diagnostics Strip (1-tap access to permissions & test push)
+                    item {
+                        PermissionsAndQuickEventStrip(
+                            permissionStatus = permissionStatus,
+                            onOpenNotificationListener = { LuminaPermissionHelper.openNotificationListenerSettings(context) },
+                            onOpenOverlayPermission = { LuminaPermissionHelper.openOverlayPermissionSettings(context) },
+                            onGoToSystemTab = { currentTab = 4 },
+                            onTriggerLiveEventTest = {
+                                appColorRules.firstOrNull { !it.isBlacklisted }?.let {
+                                    viewModel.triggerSimulatedAppNotification(it)
+                                }
+                            }
+                        )
+                    }
+
+                    // 3. Live Notification Toast Banner
                     item {
                         AnimatedVisibility(
                             visible = bannerMessage != null,
@@ -274,7 +352,7 @@ fun LuminaAodAppRoot(
                         }
                     }
 
-                    // Interactive Real-Time AMOLED Canvas Preview (Always visible at top)
+                    // 4. Interactive Real-Time 120Hz AMOLED Canvas Preview (Always visible at top, supports Drag & Drop)
                     item {
                         InteractiveAmoledPreviewCard(
                             config = config,
@@ -286,6 +364,8 @@ fun LuminaAodAppRoot(
                             callState = callState,
                             recentNotifications = recentNotifications,
                             onToggleIslandExpand = viewModel::toggleIslandExpanded,
+                            onDragIslandByDeltaDp = viewModel::onDragIslandByDeltaDp,
+                            onResetIslandPosition = viewModel::resetIslandPositionToCamera,
                             onPlayPauseMedia = viewModel::toggleMediaPlayPause,
                             onNextTrack = viewModel::skipToNextTrack,
                             onToggleTimer = viewModel::toggleTimerRunning,
@@ -297,7 +377,7 @@ fun LuminaAodAppRoot(
                         )
                     }
 
-                    // Active Tab Content
+                    // 5. Active Tab Content
                     item {
                         when (currentTab) {
                             0 -> StudioCustomizationSection(
@@ -313,6 +393,12 @@ fun LuminaAodAppRoot(
                                 onToggleShowSeconds = viewModel::toggleShowSeconds,
                                 onToggleShowWeather = viewModel::toggleShowWeatherOnAod,
                                 onToggleShowBadges = viewModel::toggleShowNotificationBadges,
+                                onToggleParallax3d = viewModel::toggleParallax3d,
+                                onParallaxIntensityChange = viewModel::setParallaxIntensity,
+                                onToggleLiquidMetaball = viewModel::toggleLiquidMetaballMorph,
+                                onAnimationSpeedChange = viewModel::setAnimationSpeedMultiplier,
+                                onToggleEdgeParticles = viewModel::toggleEdgeParticleSparks,
+                                onSimulateTiltPreview = viewModel::setSimulatedTiltPreview,
                                 onApplyPreset = viewModel::applyPreset,
                                 onSavePreset = viewModel::saveCurrentAsPreset,
                                 onDeletePreset = viewModel::deletePreset
@@ -320,9 +406,15 @@ fun LuminaAodAppRoot(
 
                             1 -> IslandAndCameraRingSection(
                                 config = config,
-                                appColorRules = appColorRules,
                                 recentNotifications = recentNotifications,
                                 onToggleDynamicIsland = viewModel::toggleDynamicIsland,
+                                onSelectIslandShape = viewModel::setIslandShape,
+                                onSelectIslandAnchor = viewModel::setIslandAnchorPreset,
+                                onToggleIslandFreeDrag = viewModel::toggleIslandFreeDrag,
+                                onToggleIslandMagneticSnap = viewModel::toggleIslandMagneticSnap,
+                                onSetIslandExactOffset = viewModel::setIslandExactOffsetDp,
+                                onResetIslandPositionToCamera = viewModel::resetIslandPositionToCamera,
+                                onUpdateIslandVisualSettings = viewModel::updateIslandVisualSettings,
                                 onToggleCameraRing = viewModel::toggleCameraRing,
                                 onSelectRingMode = viewModel::setCameraRingMode,
                                 onUpdateCameraGeometry = viewModel::updateCameraHolePosition,
@@ -331,12 +423,25 @@ fun LuminaAodAppRoot(
                                 },
                                 onToggleIslandExpanded = viewModel::toggleIslandExpanded,
                                 onSendCustomQuickReply = viewModel::sendQuickReply,
-                                onTriggerSimulatedAppPush = viewModel::triggerSimulatedAppNotification,
-                                onUpdateAppRuleColor = viewModel::updateAppRuleColor,
                                 onClearNotifications = viewModel::clearNotificationLogs
                             )
 
-                            2 -> WeatherAndWidgetsSection(
+                            2 -> AppFilterRulesSection(
+                                config = config,
+                                appColorRules = appColorRules,
+                                installedApps = installedApps,
+                                onSelectFilterMode = viewModel::setAppFilterMode,
+                                onToggleWhitelist = viewModel::toggleAppWhitelist,
+                                onToggleBlacklist = viewModel::toggleAppBlacklist,
+                                onToggleWakeScreen = viewModel::toggleAppWakeScreen,
+                                onToggleAutoExpand = viewModel::toggleAppAutoExpandIsland,
+                                onUpdateAppRuleColor = viewModel::updateAppRuleColor,
+                                onAddAppRule = viewModel::addCustomOrInstalledAppRule,
+                                onDeleteAppRule = viewModel::deleteAppRule,
+                                onTriggerSimulatedAppPush = viewModel::triggerSimulatedAppNotification
+                            )
+
+                            3 -> WeatherAndWidgetsSection(
                                 config = config,
                                 weather = weather,
                                 isLoading = isWeatherLoading,
@@ -346,9 +451,22 @@ fun LuminaAodAppRoot(
                                 onToggleShowWeatherOnAod = viewModel::toggleShowWeatherOnAod
                             )
 
-                            3 -> BatteryAndDeepSleepSection(
+                            4 -> BatteryAndDeepSleepSection(
                                 config = config,
                                 telemetry = telemetry,
+                                permissionStatus = permissionStatus,
+                                onRefreshPermissionsAndRestart = viewModel::restartServicesAndVerify,
+                                onRequestPostNotificationPermission = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    } else {
+                                        viewModel.refreshPermissionStatus()
+                                    }
+                                },
+                                onToggleAutoWakeOnNotification = viewModel::toggleAutoWakeOnNotification,
+                                onToggleAutoWakeOnCharging = viewModel::toggleAutoWakeOnCharging,
+                                onToggleAutoShowOnScreenOff = viewModel::toggleAutoShowOnScreenOff,
+                                onToggleSystemOverlay = viewModel::toggleSystemOverlayEnabled,
                                 onToggleProximityPocket = viewModel::toggleProximityPocketMode,
                                 onTogglePocketSimulation = viewModel::togglePocketSimulation,
                                 onTogglePixelShift = viewModel::togglePixelShift,
@@ -385,6 +503,7 @@ fun LuminaAodAppRoot(
                 callState = callState,
                 recentNotifications = recentNotifications,
                 onToggleIslandExpand = viewModel::toggleIslandExpanded,
+                onDragIslandByDeltaDp = viewModel::onDragIslandByDeltaDp,
                 onPlayPauseMedia = viewModel::toggleMediaPlayPause,
                 onNextTrack = viewModel::skipToNextTrack,
                 onToggleTimer = viewModel::toggleTimerRunning,
@@ -396,6 +515,105 @@ fun LuminaAodAppRoot(
                 onManualPixelShiftStep = viewModel::triggerManualPixelShiftStep,
                 onExitFullScreen = { viewModel.setFullScreenAodActive(false) }
             )
+        }
+    }
+}
+
+@Composable
+private fun PermissionsAndQuickEventStrip(
+    permissionStatus: SystemPermissionStatus,
+    onOpenNotificationListener: () -> Unit,
+    onOpenOverlayPermission: () -> Unit,
+    onGoToSystemTab: () -> Unit,
+    onTriggerLiveEventTest: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(ObsidianCard)
+            .border(
+                1.dp,
+                if (permissionStatus.allCriticalGranted) EnergyEmerald.copy(alpha = 0.45f)
+                else SolarAmber.copy(alpha = 0.65f),
+                RoundedCornerShape(16.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onGoToSystemTab() },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (permissionStatus.allCriticalGranted) Icons.Default.CheckCircle else Icons.Default.VerifiedUser,
+                contentDescription = null,
+                tint = if (permissionStatus.allCriticalGranted) EnergyEmerald else SolarAmber,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+                Text(
+                    text = if (permissionStatus.allCriticalGranted) {
+                        "Все критические разрешения выданы (${permissionStatus.grantedCount}/4)"
+                    } else {
+                        "Разрешения: ${permissionStatus.grantedCount}/4 • Нажмите для настройки"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp,
+                    color = PureWhite
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = if (permissionStatus.hasNotificationListenerAccess) "✓ Пуши: ВКЛ" else "⚠ Доступ к пушам",
+                        fontFamily = ShareTechMonoFontFamily,
+                        fontSize = 10.sp,
+                        color = if (permissionStatus.hasNotificationListenerAccess) EnergyEmerald else SolarAmber,
+                        modifier = Modifier.clickable { onOpenNotificationListener() }
+                    )
+                    Text(
+                        text = if (permissionStatus.hasOverlayPermission) "✓ Оверлей: ВКЛ" else "⚠ Оверлей окон",
+                        fontFamily = ShareTechMonoFontFamily,
+                        fontSize = 10.sp,
+                        color = if (permissionStatus.hasOverlayPermission) EnergyEmerald else SolarAmber,
+                        modifier = Modifier.clickable { onOpenOverlayPermission() }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Surface(
+            onClick = onTriggerLiveEventTest,
+            shape = RoundedCornerShape(50),
+            color = CyberCyan.copy(alpha = 0.2f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan),
+            modifier = Modifier.testTag("quick_test_event_pulse_button")
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.NotificationsActive,
+                    contentDescription = "Тест события",
+                    tint = CyberCyan,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Тест Пуша",
+                    fontFamily = ShareTechMonoFontFamily,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CyberCyan
+                )
+            }
         }
     }
 }
@@ -448,7 +666,7 @@ private fun LuminaStudioHeaderCard(
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "AMOLED PRO",
+                            text = "2026 • 120HZ",
                             fontFamily = ShareTechMonoFontFamily,
                             fontSize = 10.sp,
                             color = EnergyEmerald
@@ -457,7 +675,7 @@ private fun LuminaStudioHeaderCard(
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Always On Display • Динамический Остров • Кольцо Камеры • OPR $oprPercent%",
+                    text = "Always On Display • Перемещаемый Остров • Списки Аппов • OPR $oprPercent%",
                     style = MaterialTheme.typography.bodyMedium,
                     fontSize = 11.sp,
                     color = MutedSlate

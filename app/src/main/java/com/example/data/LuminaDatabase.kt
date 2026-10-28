@@ -22,6 +22,7 @@ data class AodPresetEntity(
     val paletteId: String,
     val ringModeId: String,
     val weatherStyleId: String,
+    val islandShapeId: String = "split_drop",
     val burnInCheckerboard: Boolean = true,
     val createdAt: Long = System.currentTimeMillis()
 )
@@ -34,16 +35,23 @@ data class AppColorRuleEntity(
     val colorHex: Long,
     val ringPulseEnabled: Boolean = true,
     val edgeWaveEnabled: Boolean = true,
-    val showInDynamicIsland: Boolean = true
+    val showInDynamicIsland: Boolean = true,
+    val isWhitelisted: Boolean = true,
+    val isBlacklisted: Boolean = false,
+    val wakeScreenOnPush: Boolean = true,
+    val autoExpandIslandOnPush: Boolean = true,
+    val priorityLevel: Int = 2 // 1 = Low, 2 = Normal, 3 = VIP High
 )
 
 @Entity(tableName = "notification_logs")
 data class NotificationLogEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val appName: String,
+    val packageName: String = "",
     val senderOrTitle: String,
     val messageBody: String,
     val colorHex: Long,
+    val wasBlockedByFilter: Boolean = false,
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -61,8 +69,11 @@ interface LuminaDao {
     @Query("DELETE FROM aod_presets WHERE id = :id")
     suspend fun deletePresetById(id: Int)
 
-    @Query("SELECT * FROM app_color_rules ORDER BY appDisplayName ASC")
+    @Query("SELECT * FROM app_color_rules ORDER BY priorityLevel DESC, appDisplayName ASC")
     fun observeAppColorRules(): Flow<List<AppColorRuleEntity>>
+
+    @Query("SELECT * FROM app_color_rules")
+    suspend fun getAllAppColorRulesOnce(): List<AppColorRuleEntity>
 
     @Query("SELECT COUNT(*) FROM app_color_rules")
     suspend fun getAppRuleCount(): Int
@@ -70,7 +81,10 @@ interface LuminaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAppColorRule(rule: AppColorRuleEntity)
 
-    @Query("SELECT * FROM notification_logs ORDER BY timestamp DESC LIMIT 20")
+    @Query("DELETE FROM app_color_rules WHERE packageName = :packageName")
+    suspend fun deleteAppRuleByPackage(packageName: String)
+
+    @Query("SELECT * FROM notification_logs ORDER BY timestamp DESC LIMIT 30")
     fun observeRecentNotifications(): Flow<List<NotificationLogEntity>>
 
     @Query("SELECT COUNT(*) FROM notification_logs")
@@ -89,7 +103,7 @@ interface LuminaDao {
         AppColorRuleEntity::class,
         NotificationLogEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class LuminaDatabase : RoomDatabase() {

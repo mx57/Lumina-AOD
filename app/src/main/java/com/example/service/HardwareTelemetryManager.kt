@@ -12,6 +12,8 @@ import android.os.BatteryManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 data class HardwareTelemetryState(
@@ -25,7 +27,10 @@ data class HardwareTelemetryState(
     val lastLiftGestureTimestamp: Long = 0L,
     val pixelShiftOffsetX: Float = 0f,
     val pixelShiftOffsetY: Float = 0f,
-    val pixelShiftCycleCount: Int = 1
+    val pixelShiftCycleCount: Int = 1,
+    // 2026 3D Gyro / Tilt Parallax Coordinates (-1f..+1f)
+    val tiltNormalizedX: Float = 0f,
+    val tiltNormalizedY: Float = 0f
 )
 
 class HardwareTelemetryManager(private val context: Context) : SensorEventListener {
@@ -43,6 +48,8 @@ class HardwareTelemetryManager(private val context: Context) : SensorEventListen
     val telemetry: StateFlow<HardwareTelemetryState> = _telemetry.asStateFlow()
 
     private var isRegistered = false
+    private var smoothedTiltX = 0f
+    private var smoothedTiltY = 0f
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -56,12 +63,16 @@ class HardwareTelemetryManager(private val context: Context) : SensorEventListen
             val tempTenths = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 294)
             val voltage = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 4180)
 
+            val prevCharging = _telemetry.value.isCharging
             _telemetry.value = _telemetry.value.copy(
                 batteryPercent = pct,
                 isCharging = charging,
                 batteryTempCelsius = tempTenths / 10f,
                 batteryVoltageMv = voltage
             )
+            if (charging && !prevCharging) {
+                LuminaEventBus.emitAction(SystemQuickAction.DeviceChargingConnected(pct))
+            }
         }
     }
 
@@ -75,7 +86,7 @@ class HardwareTelemetryManager(private val context: Context) : SensorEventListen
             sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
         accelerometerSensor?.let {
-            sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
     }
 
@@ -95,6 +106,13 @@ class HardwareTelemetryManager(private val context: Context) : SensorEventListen
         )
     }
 
+    fun setSimulatedTilt(nx: Float, ny: Float) {
+        _telemetry.value = _telemetry.value.copy(
+            tiltNormalizedX = nx.coerceIn(-1f, 1f),
+            tiltNormalizedY = ny.coerceIn(-1f, 1f)
+        )
+    }
+
     fun triggerLiftToWakeEvent() {
         _telemetry.value = _telemetry.value.copy(
             lastLiftGestureTimestamp = System.currentTimeMillis(),
@@ -103,12 +121,11 @@ class HardwareTelemetryManager(private val context: Context) : SensorEventListen
     }
 
     fun advanceOrbitalPixelShift(stepIndex: Int) {
-        // Moves content along a smooth 8-point orbital path within [-6dp..+6dp] to prevent OLED burn-in
         val angles = listOf(0.0, 0.78, 1.57, 2.35, 3.14, 3.92, 4.71, 5.49)
         val angle = angles[stepIndex % angles.size]
         val radius = 5.0f
-        val dx = ( kotlin.math.cos(angle) * radius ).toFloat()
-        val dy = ( kotlin.math.sin(angle) * radius ).toFloat()
+        val dx = (cos(angle) * radius).toFloat()
+        val dy = (sin(angle) * radius).toFloat()
         _telemetry.value = _telemetry.value.copy(
             pixelShiftOffsetX = dx,
             pixelShiftOffsetY = dy,
@@ -130,13 +147,22 @@ class HardwareTelemetryManager(private val context: Context) : SensorEventListen
                 val y = event.values.getOrElse(1) { 0f }
                 val z = event.values.getOrElse(2) { 0f }
                 val magnitude = sqrt(x * x + y * y + z * z)
-                // Detect gentle lift/tilt movement
-                if (magnitude > 11.8f && y > 4.5f) {
-                    val now = System.currentTimeMillis()
-                    if (now - _telemetry.value.lastLiftGestureTimestamp > 4000L) {
-                        _telemetry.value = _telemetry.value.copy(lastLiftGestureTimestamp = now)
-                    }
-                }
+
+                // Low-pass filter for smooth 120Hz 3D parallax
+                val targetX = (-x / 6.5f).coerceIn(-1f, 1f)
+                val targetY = ((y - 5.0f) / 6.5f).coerceIn(-1f, 1f)
+                smoothedTiltX += (targetX - smoothedTiltX) * 0.14f
+                smoothedTiltY += (targetY - smoothedTiltY) * 0.14f
+
+                val now = System.currentTimeMillis()
+                val liftTriggered = magnitude > 11.8f && y > 4.5f &&
+                    (now - _telemetry.value.lastLiftGestureTimestamp > 4000L)
+
+                _telemetry.value = _telemetry.value.copy(
+                    tiltNormalizedX = smoothedTiltX,
+                    tiltNormalizedY = smoothedTiltY,
+                    lastLiftGestureTimestamp = if (liftTriggered) now else _telemetry.value.lastLiftGestureTimestamp
+                )
             }
         }
     }

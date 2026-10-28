@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,8 +21,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.ButtonDefaults
@@ -34,7 +37,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +62,7 @@ import com.example.ui.theme.PitchBlack
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.ShareTechMonoFontFamily
 import com.example.ui.theme.SolarAmber
+import kotlin.math.abs
 
 @Composable
 fun InteractiveAmoledPreviewCard(
@@ -69,6 +75,8 @@ fun InteractiveAmoledPreviewCard(
     callState: IslandCallState,
     recentNotifications: List<NotificationLogEntity>,
     onToggleIslandExpand: () -> Unit,
+    onDragIslandByDeltaDp: (Float, Float) -> Unit,
+    onResetIslandPosition: () -> Unit,
     onPlayPauseMedia: () -> Unit,
     onNextTrack: () -> Unit,
     onToggleTimer: () -> Unit,
@@ -79,7 +87,7 @@ fun InteractiveAmoledPreviewCard(
     onLaunchFullScreenAod: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val activeNotifColor = recentNotifications.firstOrNull()?.colorHex ?: messageState.appColorHex
+    val activeNotifColor = recentNotifications.firstOrNull { !it.wasBlockedByFilter }?.colorHex ?: messageState.appColorHex
     val isDeepSleeping = config.isManualDeepSleepActive ||
         (config.proximityPocketMode && telemetry.isProximityCovered) ||
         (telemetry.batteryPercent <= config.lowBatteryAutoOffPercent)
@@ -87,7 +95,7 @@ fun InteractiveAmoledPreviewCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(340.dp)
+            .height(352.dp)
             .clip(RoundedCornerShape(32.dp))
             .background(PitchBlack)
             .border(1.5.dp, ObsidianBorder, RoundedCornerShape(32.dp))
@@ -108,11 +116,24 @@ fun InteractiveAmoledPreviewCard(
                 cornerRadiusDp = 32.dp
             )
 
-            // 2. Center Clock, Weather Widget & Notification Pills
+            // 1b. Subtle Magnetic Center Guide Line when Island is near center X = 0
+            if (config.isIslandFreeDragEnabled && config.islandMagneticSnap && abs(config.islandOffsetXDp) < 2f) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawLine(
+                        color = CyberCyan.copy(alpha = 0.18f),
+                        start = Offset(size.width / 2f, 0f),
+                        end = Offset(size.width / 2f, size.height * 0.45f),
+                        strokeWidth = 1.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
+                    )
+                }
+            }
+
+            // 2. Center Clock, Weather Widget & Notification Pills with 3D Parallax
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 56.dp, bottom = 44.dp),
+                    .padding(top = 56.dp, bottom = 46.dp),
                 contentAlignment = Alignment.Center
             ) {
                 AodClockAndWidgetsContent(
@@ -122,15 +143,17 @@ fun InteractiveAmoledPreviewCard(
                     isCharging = telemetry.isCharging,
                     recentNotifications = recentNotifications,
                     pixelShiftOffsetX = telemetry.pixelShiftOffsetX,
-                    pixelShiftOffsetY = telemetry.pixelShiftOffsetY
+                    pixelShiftOffsetY = telemetry.pixelShiftOffsetY,
+                    tiltNormalizedX = telemetry.tiltNormalizedX,
+                    tiltNormalizedY = telemetry.tiltNormalizedY
                 )
             }
 
-            // 3. Interactive Dynamic Island at top around camera hole
+            // 3. Movable Multi-Shape Interactive Dynamic Island
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp),
+                    .fillMaxSize()
+                    .padding(top = 4.dp),
                 contentAlignment = Alignment.TopCenter
             ) {
                 DynamicIslandInteractiveCapsule(
@@ -141,7 +164,10 @@ fun InteractiveAmoledPreviewCard(
                     callState = callState,
                     weather = weather,
                     batteryPercent = telemetry.batteryPercent,
+                    tiltNormalizedX = telemetry.tiltNormalizedX,
+                    tiltNormalizedY = telemetry.tiltNormalizedY,
                     onToggleExpand = onToggleIslandExpand,
+                    onDragIslandByDeltaDp = onDragIslandByDeltaDp,
                     onPlayPauseMedia = onPlayPauseMedia,
                     onNextTrack = onNextTrack,
                     onToggleTimer = onToggleTimer,
@@ -156,36 +182,68 @@ fun InteractiveAmoledPreviewCard(
             BurnInCheckerboardOverlay(enabled = config.burnInCheckerboard)
         }
 
-        // Bottom Telemetry & Launch Fullscreen Bar
+        // Bottom Telemetry, Drag Indicator & Launch Fullscreen Bar
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(0xCC0D131F))
-                    .border(1.dp, EnergyEmerald.copy(alpha = 0.45f), RoundedCornerShape(50))
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Box(
+                Row(
                     modifier = Modifier
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(EnergyEmerald)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "OPR ${config.calculateOprPercentage()}% • ~${config.estimatedBatteryDrainPerHourPercent()}%/ч",
-                    fontFamily = ShareTechMonoFontFamily,
-                    fontSize = 11.sp,
-                    color = PureWhite
-                )
+                        .clip(RoundedCornerShape(50))
+                        .background(Color(0xCC0D131F))
+                        .border(1.dp, EnergyEmerald.copy(alpha = 0.45f), RoundedCornerShape(50))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(EnergyEmerald)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "OPR ${config.calculateOprPercentage()}% • 120Hz",
+                        fontFamily = ShareTechMonoFontFamily,
+                        fontSize = 10.sp,
+                        color = PureWhite
+                    )
+                }
+
+                // Island Coordinates & Reset Quick Pill
+                Surface(
+                    onClick = onResetIslandPosition,
+                    shape = RoundedCornerShape(50),
+                    color = Color(0xCC111927),
+                    modifier = Modifier.testTag("reset_island_pos_pill")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (config.isIslandFreeDragEnabled) Icons.Default.OpenWith else Icons.Default.CenterFocusStrong,
+                            contentDescription = "Сбросить позицию Острова",
+                            tint = CyberCyan,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${config.islandOffsetXDp.toInt()},${config.islandOffsetYDp.toInt()}dp",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 10.sp,
+                            color = CyberCyan
+                        )
+                    }
+                }
             }
 
             Surface(
@@ -229,6 +287,7 @@ fun FullScreenLiveAodOverlay(
     callState: IslandCallState,
     recentNotifications: List<NotificationLogEntity>,
     onToggleIslandExpand: () -> Unit,
+    onDragIslandByDeltaDp: (Float, Float) -> Unit,
     onPlayPauseMedia: () -> Unit,
     onNextTrack: () -> Unit,
     onToggleTimer: () -> Unit,
@@ -242,7 +301,7 @@ fun FullScreenLiveAodOverlay(
 ) {
     BackHandler { onExitFullScreen() }
 
-    val activeNotifColor = recentNotifications.firstOrNull()?.colorHex ?: messageState.appColorHex
+    val activeNotifColor = recentNotifications.firstOrNull { !it.wasBlockedByFilter }?.colorHex ?: messageState.appColorHex
     val isDeepSleeping = config.isManualDeepSleepActive ||
         (config.proximityPocketMode && telemetry.isProximityCovered) ||
         (telemetry.batteryPercent <= config.lowBatteryAutoOffPercent)
@@ -291,13 +350,15 @@ fun FullScreenLiveAodOverlay(
                     isCharging = telemetry.isCharging,
                     recentNotifications = recentNotifications,
                     pixelShiftOffsetX = telemetry.pixelShiftOffsetX,
-                    pixelShiftOffsetY = telemetry.pixelShiftOffsetY
+                    pixelShiftOffsetY = telemetry.pixelShiftOffsetY,
+                    tiltNormalizedX = telemetry.tiltNormalizedX,
+                    tiltNormalizedY = telemetry.tiltNormalizedY
                 )
             }
 
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .padding(top = 12.dp),
                 contentAlignment = Alignment.TopCenter
             ) {
@@ -309,7 +370,10 @@ fun FullScreenLiveAodOverlay(
                     callState = callState,
                     weather = weather,
                     batteryPercent = telemetry.batteryPercent,
+                    tiltNormalizedX = telemetry.tiltNormalizedX,
+                    tiltNormalizedY = telemetry.tiltNormalizedY,
                     onToggleExpand = onToggleIslandExpand,
+                    onDragIslandByDeltaDp = onDragIslandByDeltaDp,
                     onPlayPauseMedia = onPlayPauseMedia,
                     onNextTrack = onNextTrack,
                     onToggleTimer = onToggleTimer,
@@ -391,7 +455,7 @@ fun FullScreenLiveAodOverlay(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "Двойной тап в любом месте для разблокировки • OPR ${config.calculateOprPercentage()}%",
+                    text = "Перетаскивайте Остров пальцем • Двойной тап для выхода • OPR ${config.calculateOprPercentage()}%",
                     fontFamily = ShareTechMonoFontFamily,
                     fontSize = 10.sp,
                     color = MutedSlate.copy(alpha = 0.65f)
