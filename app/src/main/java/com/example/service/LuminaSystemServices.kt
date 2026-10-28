@@ -31,6 +31,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -71,6 +72,8 @@ object LuminaEventBus {
     var isAodActiveGlobal: Boolean = true
     var isDeepSleepGlobal: Boolean = false
     var isForegroundServiceRunning: Boolean = false
+    var lastActiveNotificationPackage: String = "org.telegram.messenger"
+    val latestContentIntents = mutableMapOf<String, PendingIntent>()
 
     fun emitAction(action: SystemQuickAction) {
         _events.tryEmit(action)
@@ -218,6 +221,74 @@ object LuminaPermissionHelper {
                 .distinctBy { it.packageName }
                 .sortedBy { it.appName.lowercase() }
         }.getOrDefault(emptyList())
+    }
+
+    fun launchParentApplication(
+        context: Context,
+        packageName: String,
+        appLabel: String = ""
+    ): Boolean {
+        val targetPkg = packageName.ifBlank { LuminaEventBus.lastActiveNotificationPackage }
+        val displayLabel = appLabel.ifBlank {
+            targetPkg.substringAfterLast('.').replaceFirstChar { it.uppercase() }
+        }
+
+        // 1. Try firing real notification PendingIntent if captured from NotificationListenerService
+        val pendingIntent = LuminaEventBus.latestContentIntents[targetPkg]
+        if (pendingIntent != null) {
+            val sent = runCatching {
+                pendingIntent.send()
+                true
+            }.getOrDefault(false)
+            if (sent) {
+                Toast.makeText(context, "Открыто из уведомления: $displayLabel", Toast.LENGTH_SHORT).show()
+                return true
+            }
+        }
+
+        // 2. Try launching package directly via PackageManager
+        val pm = context.packageManager
+        val directIntent = runCatching { pm.getLaunchIntentForPackage(targetPkg) }.getOrNull()
+        if (directIntent != null) {
+            val started = runCatching {
+                directIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(directIntent)
+                true
+            }.getOrDefault(false)
+            if (started) {
+                Toast.makeText(context, "Запуск приложения: $displayLabel", Toast.LENGTH_SHORT).show()
+                return true
+            }
+        }
+
+        // 3. Try matching by label or partial package name among installed launcher apps
+        val installed = queryInstalledPackages(context)
+        val matchedApp = installed.firstOrNull {
+            it.packageName.equals(targetPkg, ignoreCase = true) ||
+                (displayLabel.isNotBlank() && it.appName.contains(displayLabel, ignoreCase = true))
+        }
+        if (matchedApp != null) {
+            val matchedIntent = runCatching { pm.getLaunchIntentForPackage(matchedApp.packageName) }.getOrNull()
+            if (matchedIntent != null) {
+                val started = runCatching {
+                    matchedIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(matchedIntent)
+                    true
+                }.getOrDefault(false)
+                if (started) {
+                    Toast.makeText(context, "Открыто приложение: ${matchedApp.appName}", Toast.LENGTH_SHORT).show()
+                    return true
+                }
+            }
+        }
+
+        // 4. Inform user if the simulated app is not installed on this device
+        Toast.makeText(
+            context,
+            "Переход в родительское приложение: $displayLabel ($targetPkg)",
+            Toast.LENGTH_SHORT
+        ).show()
+        return false
     }
 }
 
@@ -507,6 +578,11 @@ class LuminaNotificationListenerService : NotificationListenerService() {
             ?: ""
 
         if (text.isBlank() && title.isBlank()) return
+
+        LuminaEventBus.lastActiveNotificationPackage = sbn.packageName
+        sbn.notification.contentIntent?.let { pi ->
+            LuminaEventBus.latestContentIntents[sbn.packageName] = pi
+        }
 
         // Emit to ViewModel when active
         LuminaEventBus.emitAction(

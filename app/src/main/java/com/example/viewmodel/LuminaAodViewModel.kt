@@ -22,7 +22,9 @@ import com.example.model.IslandCallState
 import com.example.model.IslandMediaState
 import com.example.model.IslandMessageState
 import com.example.model.IslandShapeStyle
+import com.example.model.IslandTapAction
 import com.example.model.IslandTimerState
+import com.example.model.IslandVisibilityMode
 import com.example.model.SystemPermissionStatus
 import com.example.model.WeatherCityOption
 import com.example.model.WeatherSnapshot
@@ -37,6 +39,7 @@ import com.example.service.LuminaPermissionHelper
 import com.example.service.LuminaSystemOverlayController
 import com.example.service.SystemQuickAction
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -70,6 +73,18 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
     private val _isWeatherLoading = MutableStateFlow(false)
     val isWeatherLoading: StateFlow<Boolean> = _isWeatherLoading.asStateFlow()
 
+    private val _favoriteCities = MutableStateFlow(repository.loadFavoriteCities())
+    val favoriteCities: StateFlow<List<WeatherCityOption>> = _favoriteCities.asStateFlow()
+
+    private val _citySearchQuery = MutableStateFlow("")
+    val citySearchQuery: StateFlow<String> = _citySearchQuery.asStateFlow()
+
+    private val _citySearchResults = MutableStateFlow<List<WeatherCityOption>>(emptyList())
+    val citySearchResults: StateFlow<List<WeatherCityOption>> = _citySearchResults.asStateFlow()
+
+    private val _isSearchingCities = MutableStateFlow(false)
+    val isSearchingCities: StateFlow<Boolean> = _isSearchingCities.asStateFlow()
+
     private val _mediaState = MutableStateFlow(IslandMediaState())
     val mediaState: StateFlow<IslandMediaState> = _mediaState.asStateFlow()
 
@@ -93,6 +108,12 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _lastNotificationPulseTimestamp = MutableStateFlow(System.currentTimeMillis())
     val lastNotificationPulseTimestamp: StateFlow<Long> = _lastNotificationPulseTimestamp.asStateFlow()
+
+    private val _hasRecentPushEvent = MutableStateFlow(true)
+    val hasRecentPushEvent: StateFlow<Boolean> = _hasRecentPushEvent.asStateFlow()
+
+    private var autoHideIslandJob: Job? = null
+    private var citySearchJob: Job? = null
 
     val telemetry: StateFlow<HardwareTelemetryState> = telemetryManager.telemetry
 
@@ -154,10 +175,12 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                     SystemQuickAction.TriggerTestPulse -> {
                         _lastNotificationPulseTimestamp.value = System.currentTimeMillis()
+                        markRecentPushWindow()
                         updateConfigAndPersist {
                             it.copy(
                                 activeIslandType = IslandActivityType.MESSAGE_NOTIFICATION,
-                                isIslandExpanded = true
+                                isIslandExpanded = true,
+                                islandTemporaryDismissed = false
                             )
                         }
                     }
@@ -168,10 +191,12 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                     is SystemQuickAction.DeviceChargingConnected -> {
                         if (_config.value.isAodEnabled && _config.value.autoWakeOnCharging) {
+                            markRecentPushWindow()
                             updateConfigAndPersist {
                                 it.copy(
                                     activeIslandType = IslandActivityType.BATTERY_TURBO,
-                                    isIslandExpanded = true
+                                    isIslandExpanded = true,
+                                    islandTemporaryDismissed = false
                                 )
                             }
                             showTemporaryBanner("Подключена зарядка AMOLED Turbo (${action.batteryPercent}%)")
@@ -221,6 +246,20 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
         }
 
         syncNotificationShade()
+    }
+
+    private fun markRecentPushWindow() {
+        _hasRecentPushEvent.value = true
+        autoHideIslandJob?.cancel()
+        autoHideIslandJob = viewModelScope.launch {
+            val waitSec = _config.value.islandAutoCollapseSec.coerceIn(3, 30)
+            delay(waitSec * 1000L)
+            if (_config.value.islandVisibilityMode != IslandVisibilityMode.ALWAYS_VISIBLE) {
+                updateConfigAndPersist { it.copy(isIslandExpanded = false) }
+            }
+            delay(4000L)
+            _hasRecentPushEvent.value = false
+        }
     }
 
     private fun updateConfigAndPersist(transform: (AodConfigurationState) -> AodConfigurationState) {
@@ -279,14 +318,19 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
 
+        LuminaEventBus.lastActiveNotificationPackage = packageName
         _lastNotificationPulseTimestamp.value = System.currentTimeMillis()
+        markRecentPushWindow()
+
         _messageState.update {
             IslandMessageState(
                 appName = appLabel,
                 sender = title,
                 message = text,
                 appColorHex = colorHex,
-                lastReplySent = null
+                lastReplySent = null,
+                packageName = packageName,
+                receivedAtMillis = System.currentTimeMillis()
             )
         }
 
@@ -296,7 +340,8 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
         updateConfigAndPersist {
             it.copy(
                 activeIslandType = IslandActivityType.MESSAGE_NOTIFICATION,
-                isIslandExpanded = shouldExpand
+                isIslandExpanded = shouldExpand,
+                islandTemporaryDismissed = false
             )
         }
 
@@ -319,7 +364,13 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
             _isFullScreenAodActive.value = true
         }
         if (expandIsland) {
-            updateConfigAndPersist { it.copy(isIslandExpanded = true) }
+            markRecentPushWindow()
+            updateConfigAndPersist {
+                it.copy(
+                    isIslandExpanded = true,
+                    islandTemporaryDismissed = false
+                )
+            }
         }
         LuminaSystemOverlayController.dismissSystemOverlay(getApplication())
     }
@@ -417,13 +468,148 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
         _isFullScreenAodActive.value = active
     }
 
-    // Dynamic Island & Movable Geometry Controls
+    // Dynamic Island v3.0: Shapes, Visibility, Tap Gestures, Marquee & Mini-Hub
     fun toggleDynamicIsland(enabled: Boolean) {
-        updateConfigAndPersist { it.copy(isDynamicIslandEnabled = enabled) }
+        updateConfigAndPersist { it.copy(isDynamicIslandEnabled = enabled, islandTemporaryDismissed = false) }
     }
 
     fun setIslandShape(shape: IslandShapeStyle) {
-        updateConfigAndPersist { it.copy(islandShape = shape) }
+        updateConfigAndPersist { it.copy(islandShape = shape, islandTemporaryDismissed = false) }
+    }
+
+    fun setIslandVisibilityMode(mode: IslandVisibilityMode) {
+        markRecentPushWindow()
+        updateConfigAndPersist { it.copy(islandVisibilityMode = mode, islandTemporaryDismissed = false) }
+        showTemporaryBanner("Режим видимости Острова: ${mode.titleRu}")
+    }
+
+    fun setIslandTapAction(action: IslandTapAction) {
+        updateConfigAndPersist { it.copy(islandTapAction = action) }
+        showTemporaryBanner("Жест тапа по Острову: ${action.titleRu}")
+    }
+
+    fun setIslandAutoCollapseSec(seconds: Int) {
+        updateConfigAndPersist { it.copy(islandAutoCollapseSec = seconds.coerceIn(3, 30)) }
+    }
+
+    fun setIslandMarqueeEnabled(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(islandMarqueeEnabled = enabled) }
+    }
+
+    fun setIslandMarqueeSpeed(speed: Float) {
+        updateConfigAndPersist { it.copy(islandMarqueeSpeed = speed.coerceIn(0.4f, 2.5f)) }
+    }
+
+    fun setIslandMarqueeFontSize(sizeSp: Float) {
+        updateConfigAndPersist { it.copy(islandMarqueeFontSizeSp = sizeSp.coerceIn(10f, 16f)) }
+    }
+
+    fun setIslandCustomTickerText(text: String) {
+        updateConfigAndPersist { it.copy(islandCustomTickerText = text) }
+    }
+
+    fun setIslandShowWeatherInTicker(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(islandShowWeatherInTicker = enabled) }
+    }
+
+    fun setIslandPrivacyDotEnabled(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(islandPrivacyDotEnabled = enabled) }
+    }
+
+    fun setIslandLiveEqualizerEnabled(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(islandLiveEqualizerEnabled = enabled) }
+    }
+
+    fun setIslandQuickTorchEnabled(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(islandQuickTorchEnabled = enabled) }
+    }
+
+    fun toggleFlashlightFromIsland() {
+        val next = telemetryManager.toggleFlashlight()
+        showTemporaryBanner(if (next) "Фонарик вспышки ВКЛЮЧЕН из Острова" else "Фонарик ВЫКЛЮЧЕН")
+    }
+
+    fun togglePrivacySimulation() {
+        telemetryManager.togglePrivacyIndicators()
+        val cam = telemetry.value.isPrivacyCameraActive
+        showTemporaryBanner(
+            if (cam) "Индикатор приватности Камера/Микрофон активен"
+            else "Индикатор приватности в режиме ожидания"
+        )
+    }
+
+    fun handleIslandPrimaryTap() {
+        val cfg = _config.value
+        when (cfg.islandTapAction) {
+            IslandTapAction.EXPAND_THEN_OPEN_APP -> {
+                if (!cfg.isIslandExpanded) {
+                    markRecentPushWindow()
+                    updateConfigAndPersist { it.copy(isIslandExpanded = true, islandTemporaryDismissed = false) }
+                } else {
+                    openActiveIslandParentApp()
+                }
+            }
+            IslandTapAction.OPEN_PARENT_APP_IMMEDIATELY -> {
+                openActiveIslandParentApp()
+            }
+            IslandTapAction.TOGGLE_EXPAND_ONLY -> {
+                toggleIslandExpanded()
+            }
+        }
+    }
+
+    fun handleIslandLongPress() {
+        val cfg = _config.value
+        if (cfg.islandTapAction == IslandTapAction.OPEN_PARENT_APP_IMMEDIATELY) {
+            toggleIslandExpanded()
+        } else {
+            if (cfg.isIslandExpanded) {
+                updateConfigAndPersist { it.copy(isIslandExpanded = false) }
+                showTemporaryBanner("Остров свернут долгим нажатием")
+            } else {
+                updateConfigAndPersist { it.copy(islandTemporaryDismissed = true, isIslandExpanded = false) }
+                showTemporaryBanner("Остров временно скрыт (появится при новом событии)")
+            }
+        }
+    }
+
+    fun restoreDismissedIsland() {
+        markRecentPushWindow()
+        updateConfigAndPersist { it.copy(islandTemporaryDismissed = false, isIslandExpanded = false) }
+        showTemporaryBanner("Динамический Остров снова отображается")
+    }
+
+    fun openActiveIslandParentApp() {
+        val cfg = _config.value
+        val (pkg, label) = when (cfg.activeIslandType) {
+            IslandActivityType.MESSAGE_NOTIFICATION -> {
+                _messageState.value.packageName to _messageState.value.appName
+            }
+            IslandActivityType.MEDIA_PLAYER -> {
+                _mediaState.value.packageName to "Spotify / Музыка"
+            }
+            IslandActivityType.INCOMING_CALL -> {
+                "com.android.dialer" to "Телефон и Вызовы"
+            }
+            IslandActivityType.ACTIVE_TIMER -> {
+                "com.google.android.deskclock" to "Часы и Таймер"
+            }
+            IslandActivityType.WEATHER_ALERT -> {
+                getApplication<Application>().packageName to "Погодный Радар Lumina"
+            }
+            IslandActivityType.BATTERY_TURBO,
+            IslandActivityType.SYSTEM_TELEMETRY,
+            IslandActivityType.MARQUEE_TICKER -> {
+                _messageState.value.packageName.ifBlank { "org.telegram.messenger" } to _messageState.value.appName
+            }
+        }
+
+        LuminaPermissionHelper.launchParentApplication(
+            context = getApplication(),
+            packageName = pkg,
+            appLabel = label
+        )
+        showTemporaryBanner("Открытие родительского приложения: $label")
     }
 
     fun setIslandAnchorPreset(anchor: IslandAnchorPreset) {
@@ -431,7 +617,8 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
             it.copy(
                 islandAnchor = anchor,
                 islandOffsetXDp = anchor.defaultXDp,
-                islandOffsetYDp = anchor.defaultYDp
+                islandOffsetYDp = anchor.defaultYDp,
+                islandTemporaryDismissed = false
             )
         }
         showTemporaryBanner("Позиция Острова: ${anchor.titleRu}")
@@ -449,13 +636,11 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
         if (!_config.value.isIslandFreeDragEnabled) return
         updateConfigAndPersist { current ->
             var nextX = (current.islandOffsetXDp + deltaXDp).coerceIn(-135f, 135f)
-            var nextY = (current.islandOffsetYDp + deltaYDp).coerceIn(2f, 260f)
+            val nextY = (current.islandOffsetYDp + deltaYDp).coerceIn(2f, 260f)
 
-            // Magnetic snap to horizontal center (0 dp) if within 4.5dp
             if (current.islandMagneticSnap && abs(nextX) < 4.5f) {
                 nextX = 0f
             }
-            // Round to 0.5dp precision
             val roundedX = (nextX * 2f).roundToInt() / 2f
             val roundedY = (nextY * 2f).roundToInt() / 2f
 
@@ -484,7 +669,8 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
             it.copy(
                 islandAnchor = IslandAnchorPreset.TOP_CENTER,
                 islandOffsetXDp = it.cameraHoleOffsetXDp,
-                islandOffsetYDp = (it.cameraHoleOffsetYDp - 4f).coerceAtLeast(4f)
+                islandOffsetYDp = (it.cameraHoleOffsetYDp - 4f).coerceAtLeast(4f),
+                islandTemporaryDismissed = false
             )
         }
         showTemporaryBanner("Остров синхронизирован с центром селфи-камеры")
@@ -534,16 +720,24 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun setActiveIslandActivity(type: IslandActivityType, expandImmediately: Boolean = false) {
+        markRecentPushWindow()
         updateConfigAndPersist {
             it.copy(
                 activeIslandType = type,
-                isIslandExpanded = expandImmediately || it.isIslandExpanded
+                isIslandExpanded = expandImmediately || it.isIslandExpanded,
+                islandTemporaryDismissed = false
             )
         }
     }
 
     fun toggleIslandExpanded() {
-        updateConfigAndPersist { it.copy(isIslandExpanded = !it.isIslandExpanded) }
+        markRecentPushWindow()
+        updateConfigAndPersist {
+            it.copy(
+                isIslandExpanded = !it.isIslandExpanded,
+                islandTemporaryDismissed = false
+            )
+        }
     }
 
     // Media Player Actions inside Dynamic Island
@@ -601,6 +795,7 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             repository.logNotification(
                 appName = currentMsg.appName,
+                packageName = currentMsg.packageName,
                 sender = "Вы → ${currentMsg.sender}",
                 body = "Быстрый ответ из Острова: «$replyText»",
                 colorHex = currentMsg.appColorHex
@@ -693,7 +888,7 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun triggerSimulatedAppNotification(rule: AppColorRuleEntity) {
         val sampleMessages = mapOf(
-            "Telegram" to ("Дмитрий • Tech Lead" to "Остров 2026 с жидким морфингом 120Hz готов к проверке!"),
+            "Telegram" to ("Дмитрий • Tech Lead" to "Остров 2026 с бегущей строкой и переходом по тапу готов!"),
             "WhatsApp" to ("Анна" to "Во сколько сегодня созвон по макетам экрана?"),
             "Spotify / Музыка" to ("Muviz Audio Engine" to "Включена синхронизация волн с битом трека"),
             "Gmail Почта" to ("GitHub Actions" to "Release workflow completed with 0 warnings"),
@@ -741,10 +936,62 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    // Weather Controls
+    // Real Online Weather & Global Geocoding Search Controls
+    fun onCitySearchQueryChanged(query: String) {
+        _citySearchQuery.value = query
+        citySearchJob?.cancel()
+        if (query.trim().length < 2) {
+            _citySearchResults.value = emptyList()
+            _isSearchingCities.value = false
+            return
+        }
+        citySearchJob = viewModelScope.launch {
+            delay(320L)
+            executeCitySearchNow(query)
+        }
+    }
+
+    fun executeCitySearchNow(query: String = _citySearchQuery.value) {
+        val clean = query.trim()
+        if (clean.length < 2) return
+        viewModelScope.launch {
+            _isSearchingCities.value = true
+            val result = WeatherNetworkClient.searchCitiesOnline(clean)
+            result.onSuccess { list ->
+                _citySearchResults.value = list
+                if (list.isEmpty()) {
+                    showTemporaryBanner("По запросу «$clean» города не найдены")
+                }
+            }.onFailure {
+                showTemporaryBanner("Ошибка онлайн-поиска городов (проверьте сеть)")
+            }
+            _isSearchingCities.value = false
+        }
+    }
+
     fun selectWeatherCity(city: WeatherCityOption) {
         updateConfigAndPersist { it.copy(selectedCity = city) }
+        // Also ensure it is saved in favoriteCities if not already present
+        val currentFavs = _favoriteCities.value
+        if (currentFavs.none { it.nameRu.equals(city.nameRu, ignoreCase = true) && abs(it.latitude - city.latitude) < 0.2 }) {
+            val nextFavs = listOf(city) + currentFavs
+            _favoriteCities.value = nextFavs
+            repository.saveFavoriteCities(nextFavs)
+        }
+        _citySearchResults.value = emptyList()
+        _citySearchQuery.value = ""
         refreshWeatherForSelectedCity()
+        showTemporaryBanner("Выбран город: ${city.nameRu} (${city.countryRu})")
+    }
+
+    fun removeFavoriteCity(city: WeatherCityOption) {
+        val remaining = _favoriteCities.value.filterNot {
+            it.nameRu == city.nameRu && abs(it.latitude - city.latitude) < 0.05
+        }
+        if (remaining.isNotEmpty()) {
+            _favoriteCities.value = remaining
+            repository.saveFavoriteCities(remaining)
+        }
     }
 
     fun setWeatherWidgetStyle(style: WeatherWidgetStyle) {
@@ -762,12 +1009,32 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
                 _weather.update { prev ->
                     prev.copy(
                         cityName = city.nameRu,
-                        updatedAtMillis = System.currentTimeMillis()
+                        regionAndCountry = city.countryRu,
+                        latitude = city.latitude,
+                        longitude = city.longitude,
+                        updatedAtMillis = System.currentTimeMillis(),
+                        isLiveNetwork = false
                     )
                 }
             }
             _isWeatherLoading.value = false
         }
+    }
+
+    fun pushLiveWeatherToIslandTicker() {
+        val w = _weather.value
+        val summary = "${w.cityName}: ${if (w.temperatureC > 0) "+${w.temperatureC}" else "${w.temperatureC}"}°C • ${w.conditionTextRu} • Ветер ${w.windSpeedKmh} км/ч • Давление ${w.pressureMmHg} мм"
+        markRecentPushWindow()
+        updateConfigAndPersist {
+            it.copy(
+                islandMarqueeEnabled = true,
+                islandShowWeatherInTicker = true,
+                activeIslandType = IslandActivityType.WEATHER_ALERT,
+                isIslandExpanded = true,
+                islandTemporaryDismissed = false
+            )
+        }
+        showTemporaryBanner("Прогноз отправлен в бегущую строку Острова: $summary")
     }
 
     // Deep Sleep & Power Saving Controls

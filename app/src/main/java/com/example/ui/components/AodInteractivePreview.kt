@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.NotificationLogEntity
 import com.example.model.AodConfigurationState
+import com.example.model.IslandActivityType
 import com.example.model.IslandCallState
 import com.example.model.IslandMediaState
 import com.example.model.IslandMessageState
@@ -74,7 +75,14 @@ fun InteractiveAmoledPreviewCard(
     messageState: IslandMessageState,
     callState: IslandCallState,
     recentNotifications: List<NotificationLogEntity>,
+    hasRecentPushEvent: Boolean = true,
     onToggleIslandExpand: () -> Unit,
+    onPrimaryTapIsland: () -> Unit = onToggleIslandExpand,
+    onLongPressIsland: () -> Unit = {},
+    onOpenParentApp: () -> Unit = {},
+    onRestoreDismissedIsland: () -> Unit = {},
+    onToggleFlashlight: () -> Unit = {},
+    onSwitchIslandActivity: (IslandActivityType) -> Unit = {},
     onDragIslandByDeltaDp: (Float, Float) -> Unit,
     onResetIslandPosition: () -> Unit,
     onPlayPauseMedia: () -> Unit,
@@ -87,6 +95,7 @@ fun InteractiveAmoledPreviewCard(
     onLaunchFullScreenAod: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val unreadCount = recentNotifications.count { !it.wasBlockedByFilter }
     val activeNotifColor = recentNotifications.firstOrNull { !it.wasBlockedByFilter }?.colorHex ?: messageState.appColorHex
     val isDeepSleeping = config.isManualDeepSleepActive ||
         (config.proximityPocketMode && telemetry.isProximityCovered) ||
@@ -95,7 +104,7 @@ fun InteractiveAmoledPreviewCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(352.dp)
+            .height(356.dp)
             .clip(RoundedCornerShape(32.dp))
             .background(PitchBlack)
             .border(1.5.dp, ObsidianBorder, RoundedCornerShape(32.dp))
@@ -149,14 +158,14 @@ fun InteractiveAmoledPreviewCard(
                 )
             }
 
-            // 3. Movable Multi-Shape Interactive Dynamic Island
+            // 3. Movable 11-Shape Interactive Dynamic Island v3.0
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = 4.dp),
                 contentAlignment = Alignment.TopCenter
             ) {
-                DynamicIslandInteractiveCapsule(
+                DynamicIslandOverlay(
                     config = config,
                     mediaState = mediaState,
                     timerState = timerState,
@@ -164,17 +173,25 @@ fun InteractiveAmoledPreviewCard(
                     callState = callState,
                     weather = weather,
                     batteryPercent = telemetry.batteryPercent,
-                    tiltNormalizedX = telemetry.tiltNormalizedX,
-                    tiltNormalizedY = telemetry.tiltNormalizedY,
+                    isCharging = telemetry.isCharging,
+                    unreadNotificationsCount = unreadCount,
+                    hasRecentPushEvent = hasRecentPushEvent,
+                    telemetry = telemetry,
                     onToggleExpand = onToggleIslandExpand,
-                    onDragIslandByDeltaDp = onDragIslandByDeltaDp,
-                    onPlayPauseMedia = onPlayPauseMedia,
-                    onNextTrack = onNextTrack,
+                    onPrimaryTapIsland = onPrimaryTapIsland,
+                    onLongPressIsland = onLongPressIsland,
+                    onOpenParentApp = onOpenParentApp,
+                    onRestoreDismissedIsland = onRestoreDismissedIsland,
+                    onTogglePlayPause = onPlayPauseMedia,
+                    onSkipNext = onNextTrack,
                     onToggleTimer = onToggleTimer,
-                    onAddOneMinTimer = onAddOneMinTimer,
+                    onAddMinuteTimer = onAddOneMinTimer,
                     onResetTimer = onResetTimer,
                     onSendQuickReply = onSendQuickReply,
-                    onAcceptOrEndCall = onAcceptOrEndCall
+                    onAcceptOrEndCall = onAcceptOrEndCall,
+                    onToggleFlashlight = onToggleFlashlight,
+                    onSwitchIslandActivity = onSwitchIslandActivity,
+                    onDragIslandByDeltaDp = onDragIslandByDeltaDp
                 )
             }
 
@@ -286,7 +303,14 @@ fun FullScreenLiveAodOverlay(
     messageState: IslandMessageState,
     callState: IslandCallState,
     recentNotifications: List<NotificationLogEntity>,
+    hasRecentPushEvent: Boolean = true,
     onToggleIslandExpand: () -> Unit,
+    onPrimaryTapIsland: () -> Unit = onToggleIslandExpand,
+    onLongPressIsland: () -> Unit = {},
+    onOpenParentApp: () -> Unit = {},
+    onRestoreDismissedIsland: () -> Unit = {},
+    onToggleFlashlight: () -> Unit = {},
+    onSwitchIslandActivity: (IslandActivityType) -> Unit = {},
     onDragIslandByDeltaDp: (Float, Float) -> Unit,
     onPlayPauseMedia: () -> Unit,
     onNextTrack: () -> Unit,
@@ -301,6 +325,7 @@ fun FullScreenLiveAodOverlay(
 ) {
     BackHandler { onExitFullScreen() }
 
+    val unreadCount = recentNotifications.count { !it.wasBlockedByFilter }
     val activeNotifColor = recentNotifications.firstOrNull { !it.wasBlockedByFilter }?.colorHex ?: messageState.appColorHex
     val isDeepSleeping = config.isManualDeepSleepActive ||
         (config.proximityPocketMode && telemetry.isProximityCovered) ||
@@ -362,7 +387,7 @@ fun FullScreenLiveAodOverlay(
                     .padding(top = 12.dp),
                 contentAlignment = Alignment.TopCenter
             ) {
-                DynamicIslandInteractiveCapsule(
+                DynamicIslandOverlay(
                     config = config,
                     mediaState = mediaState,
                     timerState = timerState,
@@ -370,17 +395,25 @@ fun FullScreenLiveAodOverlay(
                     callState = callState,
                     weather = weather,
                     batteryPercent = telemetry.batteryPercent,
-                    tiltNormalizedX = telemetry.tiltNormalizedX,
-                    tiltNormalizedY = telemetry.tiltNormalizedY,
+                    isCharging = telemetry.isCharging,
+                    unreadNotificationsCount = unreadCount,
+                    hasRecentPushEvent = hasRecentPushEvent,
+                    telemetry = telemetry,
                     onToggleExpand = onToggleIslandExpand,
-                    onDragIslandByDeltaDp = onDragIslandByDeltaDp,
-                    onPlayPauseMedia = onPlayPauseMedia,
-                    onNextTrack = onNextTrack,
+                    onPrimaryTapIsland = onPrimaryTapIsland,
+                    onLongPressIsland = onLongPressIsland,
+                    onOpenParentApp = onOpenParentApp,
+                    onRestoreDismissedIsland = onRestoreDismissedIsland,
+                    onTogglePlayPause = onPlayPauseMedia,
+                    onSkipNext = onNextTrack,
                     onToggleTimer = onToggleTimer,
-                    onAddOneMinTimer = onAddOneMinTimer,
+                    onAddMinuteTimer = onAddOneMinTimer,
                     onResetTimer = onResetTimer,
                     onSendQuickReply = onSendQuickReply,
-                    onAcceptOrEndCall = onAcceptOrEndCall
+                    onAcceptOrEndCall = onAcceptOrEndCall,
+                    onToggleFlashlight = onToggleFlashlight,
+                    onSwitchIslandActivity = onSwitchIslandActivity,
+                    onDragIslandByDeltaDp = onDragIslandByDeltaDp
                 )
             }
 
@@ -455,7 +488,7 @@ fun FullScreenLiveAodOverlay(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "Перетаскивайте Остров пальцем • Двойной тап для выхода • OPR ${config.calculateOprPercentage()}%",
+                    text = "Тап: раскрыть/приложение • Долгий тап: скрыть • Двойной тап по фону: выход",
                     fontFamily = ShareTechMonoFontFamily,
                     fontSize = 10.sp,
                     color = MutedSlate.copy(alpha = 0.65f)

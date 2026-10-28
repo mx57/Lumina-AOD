@@ -6,6 +6,8 @@ import com.example.model.AodConfigurationState
 import com.example.model.AppFilterMode
 import com.example.model.IslandAnchorPreset
 import com.example.model.IslandShapeStyle
+import com.example.model.IslandTapAction
+import com.example.model.IslandVisibilityMode
 import com.example.service.LuminaPermissionHelper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -20,7 +22,7 @@ import org.robolectric.annotation.Config
 class ExampleRobolectricTest {
 
     @Test
-    fun `verify app name and 2026 island and permission models`() {
+    fun `verify app name and v3 island weather and permission models`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val appName = context.getString(R.string.app_name)
         assertEquals("Lumina AOD", appName)
@@ -29,12 +31,18 @@ class ExampleRobolectricTest {
         val permissionStatus = LuminaPermissionHelper.checkPermissions(context)
         assertNotNull(permissionStatus)
 
-        // Verify 2026 AodConfigurationState defaults
+        // Verify all 11 Island shapes exist
+        assertEquals(11, IslandShapeStyle.entries.size)
+
+        // Verify v3.0 AodConfigurationState defaults
         val defaultState = AodConfigurationState()
         assertEquals(IslandShapeStyle.SPLIT_DROP, defaultState.islandShape)
         assertEquals(IslandAnchorPreset.TOP_CENTER, defaultState.islandAnchor)
+        assertEquals(IslandVisibilityMode.ALWAYS_VISIBLE, defaultState.islandVisibilityMode)
+        assertEquals(IslandTapAction.EXPAND_FIRST_THEN_OPEN_APP, defaultState.islandTapAction)
         assertEquals(AppFilterMode.HYBRID_SMART, defaultState.appFilterMode)
         assertTrue(defaultState.isIslandFreeDragEnabled)
+        assertTrue(defaultState.islandMarqueeEnabled)
         assertTrue(defaultState.liquidMetaballMorphEnabled)
     }
 }

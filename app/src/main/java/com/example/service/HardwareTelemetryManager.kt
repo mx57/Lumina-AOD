@@ -1,5 +1,6 @@
 package com.example.service
 
+import android.app.ActivityManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -8,11 +9,14 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.os.BatteryManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -30,12 +34,23 @@ data class HardwareTelemetryState(
     val pixelShiftCycleCount: Int = 1,
     // 2026 3D Gyro / Tilt Parallax Coordinates (-1f..+1f)
     val tiltNormalizedX: Float = 0f,
-    val tiltNormalizedY: Float = 0f
+    val tiltNormalizedY: Float = 0f,
+    // System Memory, CPU & Torch Telemetry
+    val ramUsedGb: Float = 4.2f,
+    val ramTotalGb: Float = 8.0f,
+    val ramUsagePercent: Int = 52,
+    val cpuLoadPercent: Int = 18,
+    val isFlashlightOn: Boolean = false,
+    val isPrivacyCameraActive: Boolean = false,
+    val isPrivacyMicActive: Boolean = false
 )
 
 class HardwareTelemetryManager(private val context: Context) : SensorEventListener {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+    private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+    private val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
+
     private val proximitySensor: Sensor? = sensorManager?.getDefaultSensor(Sensor.TYPE_PROXIMITY)
     private val accelerometerSensor: Sensor? = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
@@ -70,15 +85,65 @@ class HardwareTelemetryManager(private val context: Context) : SensorEventListen
                 batteryTempCelsius = tempTenths / 10f,
                 batteryVoltageMv = voltage
             )
+            refreshSystemMemoryTelemetry()
             if (charging && !prevCharging) {
                 LuminaEventBus.emitAction(SystemQuickAction.DeviceChargingConnected(pct))
             }
         }
     }
 
+    fun refreshSystemMemoryTelemetry() {
+        runCatching {
+            val memInfo = ActivityManager.MemoryInfo()
+            activityManager?.getMemoryInfo(memInfo)
+            if (memInfo.totalMem > 0L) {
+                val totalGb = (memInfo.totalMem / (1024f * 1024f * 1024f))
+                val availGb = (memInfo.availMem / (1024f * 1024f * 1024f))
+                val usedGb = (totalGb - availGb).coerceAtLeast(0.4f)
+                val pct = ((usedGb / totalGb) * 100f).roundToInt().coerceIn(5, 98)
+                val cpuEst = (14 + (pct / 5) + ((System.currentTimeMillis() / 1000L) % 9).toInt()).coerceIn(8, 95)
+                _telemetry.value = _telemetry.value.copy(
+                    ramUsedGb = (usedGb * 10f).roundToInt() / 10f,
+                    ramTotalGb = (totalGb * 10f).roundToInt() / 10f,
+                    ramUsagePercent = pct,
+                    cpuLoadPercent = cpuEst
+                )
+            }
+        }
+    }
+
+    fun toggleFlashlight(enabled: Boolean? = null): Boolean {
+        val targetState = enabled ?: !_telemetry.value.isFlashlightOn
+        runCatching {
+            val cm = cameraManager
+            if (cm != null) {
+                val flashCamId = cm.cameraIdList.firstOrNull { id ->
+                    cm.getCameraCharacteristics(id)
+                        .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                }
+                if (flashCamId != null) {
+                    cm.setTorchMode(flashCamId, targetState)
+                }
+            }
+        }
+        _telemetry.value = _telemetry.value.copy(
+            isFlashlightOn = targetState,
+            isPrivacyCameraActive = targetState || _telemetry.value.isPrivacyCameraActive
+        )
+        return targetState
+    }
+
+    fun togglePrivacyIndicators(cameraActive: Boolean? = null, micActive: Boolean? = null) {
+        _telemetry.value = _telemetry.value.copy(
+            isPrivacyCameraActive = cameraActive ?: !_telemetry.value.isPrivacyCameraActive,
+            isPrivacyMicActive = micActive ?: !_telemetry.value.isPrivacyMicActive
+        )
+    }
+
     fun startMonitoring() {
         if (isRegistered) return
         isRegistered = true
+        refreshSystemMemoryTelemetry()
         runCatching {
             context.registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         }
@@ -126,6 +191,7 @@ class HardwareTelemetryManager(private val context: Context) : SensorEventListen
         val radius = 5.0f
         val dx = (cos(angle) * radius).toFloat()
         val dy = (sin(angle) * radius).toFloat()
+        refreshSystemMemoryTelemetry()
         _telemetry.value = _telemetry.value.copy(
             pixelShiftOffsetX = dx,
             pixelShiftOffsetY = dy,

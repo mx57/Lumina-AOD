@@ -95,9 +95,9 @@ import com.example.ui.components.FullScreenLiveAodOverlay
 import com.example.ui.components.InteractiveAmoledPreviewCard
 import com.example.ui.screens.AppFilterRulesSection
 import com.example.ui.screens.BatteryAndDeepSleepSection
-import com.example.ui.screens.IslandAndCameraRingSection
+import com.example.ui.screens.IslandAndRingSection
 import com.example.ui.screens.StudioCustomizationSection
-import com.example.ui.screens.WeatherAndWidgetsSection
+import com.example.ui.screens.WeatherWidgetCustomizationSection
 import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.EnergyEmerald
 import com.example.ui.theme.LuminaAODTheme
@@ -165,6 +165,10 @@ fun LuminaAodAppRoot(
     val isFullScreenAod by viewModel.isFullScreenAodActive.collectAsStateWithLifecycle()
     val weather by viewModel.weather.collectAsStateWithLifecycle()
     val isWeatherLoading by viewModel.isWeatherLoading.collectAsStateWithLifecycle()
+    val favoriteCities by viewModel.favoriteCities.collectAsStateWithLifecycle()
+    val citySearchQuery by viewModel.citySearchQuery.collectAsStateWithLifecycle()
+    val citySearchResults by viewModel.citySearchResults.collectAsStateWithLifecycle()
+    val isSearchingCities by viewModel.isSearchingCities.collectAsStateWithLifecycle()
     val telemetry by viewModel.telemetry.collectAsStateWithLifecycle()
     val mediaState by viewModel.mediaState.collectAsStateWithLifecycle()
     val timerState by viewModel.timerState.collectAsStateWithLifecycle()
@@ -174,6 +178,7 @@ fun LuminaAodAppRoot(
     val appColorRules by viewModel.appColorRules.collectAsStateWithLifecycle()
     val installedApps by viewModel.installedApps.collectAsStateWithLifecycle()
     val recentNotifications by viewModel.recentNotifications.collectAsStateWithLifecycle()
+    val hasRecentPushEvent by viewModel.hasRecentPushEvent.collectAsStateWithLifecycle()
     val permissionStatus by viewModel.permissionStatus.collectAsStateWithLifecycle()
     val bannerMessage by viewModel.statusBannerMessage.collectAsStateWithLifecycle()
 
@@ -352,7 +357,7 @@ fun LuminaAodAppRoot(
                         }
                     }
 
-                    // 4. Interactive Real-Time 120Hz AMOLED Canvas Preview (Always visible at top, supports Drag & Drop)
+                    // 4. Interactive Real-Time 120Hz AMOLED Canvas Preview (Supports Drag & Drop, Tap-to-Open App, Marquee)
                     item {
                         InteractiveAmoledPreviewCard(
                             config = config,
@@ -363,7 +368,16 @@ fun LuminaAodAppRoot(
                             messageState = messageState,
                             callState = callState,
                             recentNotifications = recentNotifications,
+                            hasRecentPushEvent = hasRecentPushEvent,
                             onToggleIslandExpand = viewModel::toggleIslandExpanded,
+                            onPrimaryTapIsland = viewModel::handleIslandPrimaryTap,
+                            onLongPressIsland = viewModel::handleIslandLongPress,
+                            onOpenParentApp = viewModel::openActiveIslandParentApp,
+                            onRestoreDismissedIsland = viewModel::restoreDismissedIsland,
+                            onToggleFlashlight = viewModel::toggleFlashlightFromIsland,
+                            onSwitchIslandActivity = { act ->
+                                viewModel.setActiveIslandActivity(act, expandImmediately = true)
+                            },
                             onDragIslandByDeltaDp = viewModel::onDragIslandByDeltaDp,
                             onResetIslandPosition = viewModel::resetIslandPositionToCamera,
                             onPlayPauseMedia = viewModel::toggleMediaPlayPause,
@@ -404,25 +418,41 @@ fun LuminaAodAppRoot(
                                 onDeletePreset = viewModel::deletePreset
                             )
 
-                            1 -> IslandAndCameraRingSection(
+                            1 -> IslandAndRingSection(
                                 config = config,
+                                telemetry = telemetry,
+                                appRules = appColorRules,
                                 recentNotifications = recentNotifications,
                                 onToggleDynamicIsland = viewModel::toggleDynamicIsland,
                                 onSelectIslandShape = viewModel::setIslandShape,
+                                onSelectVisibilityMode = viewModel::setIslandVisibilityMode,
+                                onSelectTapAction = viewModel::setIslandTapAction,
+                                onSetAutoCollapseSec = viewModel::setIslandAutoCollapseSec,
+                                onToggleMarquee = viewModel::setIslandMarqueeEnabled,
+                                onChangeMarqueeSpeed = viewModel::setIslandMarqueeSpeed,
+                                onChangeMarqueeFontSize = viewModel::setIslandMarqueeFontSize,
+                                onChangeCustomTickerText = viewModel::setIslandCustomTickerText,
+                                onToggleWeatherInTicker = viewModel::setIslandShowWeatherInTicker,
+                                onTogglePrivacyDot = viewModel::setIslandPrivacyDotEnabled,
+                                onToggleLiveEqualizer = viewModel::setIslandLiveEqualizerEnabled,
+                                onToggleQuickTorch = viewModel::setIslandQuickTorchEnabled,
+                                onTriggerFlashlight = viewModel::toggleFlashlightFromIsland,
+                                onTriggerPrivacySim = viewModel::togglePrivacySimulation,
+                                onOpenParentApp = viewModel::openActiveIslandParentApp,
                                 onSelectIslandAnchor = viewModel::setIslandAnchorPreset,
-                                onToggleIslandFreeDrag = viewModel::toggleIslandFreeDrag,
-                                onToggleIslandMagneticSnap = viewModel::toggleIslandMagneticSnap,
-                                onSetIslandExactOffset = viewModel::setIslandExactOffsetDp,
-                                onResetIslandPositionToCamera = viewModel::resetIslandPositionToCamera,
-                                onUpdateIslandVisualSettings = viewModel::updateIslandVisualSettings,
-                                onToggleCameraRing = viewModel::toggleCameraRing,
-                                onSelectRingMode = viewModel::setCameraRingMode,
-                                onUpdateCameraGeometry = viewModel::updateCameraHolePosition,
+                                onToggleFreeDrag = viewModel::toggleIslandFreeDrag,
+                                onToggleMagneticSnap = viewModel::toggleIslandMagneticSnap,
+                                onUpdateIslandExactOffset = viewModel::setIslandExactOffsetDp,
+                                onResetIslandToCamera = viewModel::resetIslandPositionToCamera,
+                                onUpdateIslandVisuals = viewModel::updateIslandVisualSettings,
                                 onSelectIslandActivity = { act ->
                                     viewModel.setActiveIslandActivity(act, expandImmediately = true)
                                 },
                                 onToggleIslandExpanded = viewModel::toggleIslandExpanded,
-                                onSendCustomQuickReply = viewModel::sendQuickReply,
+                                onToggleCameraRing = viewModel::toggleCameraRing,
+                                onSelectCameraRingMode = viewModel::setCameraRingMode,
+                                onUpdateCameraHolePosition = viewModel::updateCameraHolePosition,
+                                onTriggerSimulatedNotification = viewModel::triggerSimulatedAppNotification,
                                 onClearNotifications = viewModel::clearNotificationLogs
                             )
 
@@ -441,14 +471,22 @@ fun LuminaAodAppRoot(
                                 onTriggerSimulatedAppPush = viewModel::triggerSimulatedAppNotification
                             )
 
-                            3 -> WeatherAndWidgetsSection(
+                            3 -> WeatherWidgetCustomizationSection(
                                 config = config,
                                 weather = weather,
                                 isLoading = isWeatherLoading,
+                                favoriteCities = favoriteCities,
+                                citySearchQuery = citySearchQuery,
+                                citySearchResults = citySearchResults,
+                                isSearchingCities = isSearchingCities,
+                                onSearchQueryChange = viewModel::onCitySearchQueryChanged,
+                                onExecuteSearchNow = { viewModel.executeCitySearchNow() },
                                 onSelectCity = viewModel::selectWeatherCity,
-                                onRefreshWeather = viewModel::refreshWeatherForSelectedCity,
+                                onRemoveFavoriteCity = viewModel::removeFavoriteCity,
                                 onSelectWidgetStyle = viewModel::setWeatherWidgetStyle,
-                                onToggleShowWeatherOnAod = viewModel::toggleShowWeatherOnAod
+                                onToggleShowWeatherOnAod = viewModel::toggleShowWeatherOnAod,
+                                onRefreshWeather = viewModel::refreshWeatherForSelectedCity,
+                                onPushWeatherToIslandTicker = viewModel::pushLiveWeatherToIslandTicker
                             )
 
                             4 -> BatteryAndDeepSleepSection(
@@ -502,7 +540,16 @@ fun LuminaAodAppRoot(
                 messageState = messageState,
                 callState = callState,
                 recentNotifications = recentNotifications,
+                hasRecentPushEvent = hasRecentPushEvent,
                 onToggleIslandExpand = viewModel::toggleIslandExpanded,
+                onPrimaryTapIsland = viewModel::handleIslandPrimaryTap,
+                onLongPressIsland = viewModel::handleIslandLongPress,
+                onOpenParentApp = viewModel::openActiveIslandParentApp,
+                onRestoreDismissedIsland = viewModel::restoreDismissedIsland,
+                onToggleFlashlight = viewModel::toggleFlashlightFromIsland,
+                onSwitchIslandActivity = { act ->
+                    viewModel.setActiveIslandActivity(act, expandImmediately = true)
+                },
                 onDragIslandByDeltaDp = viewModel::onDragIslandByDeltaDp,
                 onPlayPauseMedia = viewModel::toggleMediaPlayPause,
                 onNextTrack = viewModel::skipToNextTrack,
@@ -666,7 +713,7 @@ private fun LuminaStudioHeaderCard(
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "2026 • 120HZ",
+                            text = "v3.0 • 120HZ",
                             fontFamily = ShareTechMonoFontFamily,
                             fontSize = 10.sp,
                             color = EnergyEmerald
@@ -675,7 +722,7 @@ private fun LuminaStudioHeaderCard(
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Always On Display • Перемещаемый Остров • Списки Аппов • OPR $oprPercent%",
+                    text = "11 Форм Острова • Бегущая Строка • Погода Мира • OPR $oprPercent%",
                     style = MaterialTheme.typography.bodyMedium,
                     fontSize = 11.sp,
                     color = MutedSlate

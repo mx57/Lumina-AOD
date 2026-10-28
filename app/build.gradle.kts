@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.luminaaod.vqxkpm"
     minSdk = 24
     targetSdk = 36
-    versionCode = 2
-    versionName = "2.0"
+    versionCode = 3
+    versionName = "3.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -144,6 +144,7 @@ dependencies {
   "ksp"(libs.moshi.kotlin.codegen)
 }
 
+@UntrackedTask(because = "Always deletes old release APKs and writes fresh release artifacts on every build")
 abstract class PublishReleasesTask : DefaultTask() {
   @get:InputFile
   abstract val sourceApk: RegularFileProperty
@@ -162,16 +163,16 @@ abstract class PublishReleasesTask : DefaultTask() {
     val outDir = releasesDir.get().asFile
     if (!outDir.exists()) outDir.mkdirs()
 
-    val ver = versionLabel.get()
-    val arm64Name = "LuminaAOD-v${ver}-arm64-v8a.apk"
-    val arm32Name = "LuminaAOD-v${ver}-armeabi-v7a.apk"
-
-    // Clean any old version APKs in releases/
+    // Always delete ALL existing .apk files in releases/ before writing new ones
     outDir.listFiles()?.forEach { existing ->
-      if (existing.name.endsWith(".apk") && existing.name != arm64Name && existing.name != arm32Name) {
+      if (existing.isFile && existing.name.endsWith(".apk", ignoreCase = true)) {
         existing.delete()
       }
     }
+
+    val ver = versionLabel.get()
+    val arm64Name = "LuminaAOD-v${ver}-arm64-v8a.apk"
+    val arm32Name = "LuminaAOD-v${ver}-armeabi-v7a.apk"
 
     val arm64Target = outDir.resolve(arm64Name)
     val arm32Target = outDir.resolve(arm32Name)
@@ -192,7 +193,7 @@ abstract class PublishReleasesTask : DefaultTask() {
 
 val publishReleases = tasks.register<PublishReleasesTask>("publishReleases") {
   sourceApk.set(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
-  versionLabel.set(android.defaultConfig.versionName ?: "2.0")
+  versionLabel.set(android.defaultConfig.versionName ?: "3.0")
   releasesDir.set(rootProject.layout.projectDirectory.dir("releases"))
 }
 

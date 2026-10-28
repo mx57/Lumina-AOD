@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -20,13 +21,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Compress
+import androidx.compose.material.icons.filled.LocationCity
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.Umbrella
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -35,7 +42,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -47,19 +59,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AodConfigurationState
-import com.example.model.PredefinedWeatherCities
 import com.example.model.WeatherCityOption
 import com.example.model.WeatherSnapshot
 import com.example.model.WeatherWidgetStyle
-import com.example.ui.components.AodWeatherWidgetView
 import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.EnergyEmerald
-import com.example.ui.theme.IceBlue
 import com.example.ui.theme.MutedSlate
 import com.example.ui.theme.NeonMagenta
 import com.example.ui.theme.ObsidianBorder
@@ -71,14 +82,22 @@ import com.example.ui.theme.ShareTechMonoFontFamily
 import com.example.ui.theme.SolarAmber
 
 @Composable
-fun WeatherAndWidgetsSection(
+fun WeatherWidgetCustomizationSection(
     config: AodConfigurationState,
     weather: WeatherSnapshot,
     isLoading: Boolean,
+    favoriteCities: List<WeatherCityOption>,
+    citySearchQuery: String,
+    citySearchResults: List<WeatherCityOption>,
+    isSearchingCities: Boolean,
+    onSearchQueryChange: (String) -> Unit,
+    onExecuteSearchNow: () -> Unit,
     onSelectCity: (WeatherCityOption) -> Unit,
-    onRefreshWeather: () -> Unit,
+    onRemoveFavoriteCity: (WeatherCityOption) -> Unit,
     onSelectWidgetStyle: (WeatherWidgetStyle) -> Unit,
-    onToggleShowWeatherOnAod: (Boolean) -> Unit
+    onToggleShowWeatherOnAod: (Boolean) -> Unit,
+    onRefreshWeather: () -> Unit,
+    onPushWeatherToIslandTicker: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -86,9 +105,9 @@ fun WeatherAndWidgetsSection(
     ) {
         // 1. Live Open-Meteo Telemetry Card
         SectionHeaderRow(
-            icon = Icons.Default.CloudSync,
-            title = "Живая метеосводка Open-Meteo",
-            badgeText = if (weather.isLiveNetwork) "Онлайн API" else "Автономный кэш"
+            icon = Icons.Default.Cloud,
+            title = "Реальная Метеосводка (Open-Meteo API)",
+            badgeText = if (weather.isLiveNetwork) "LIVE СЕТЬ" else "КЕШ"
         )
 
         Card(
@@ -97,145 +116,482 @@ fun WeatherAndWidgetsSection(
             colors = CardDefaults.cardColors(containerColor = ObsidianCard),
             border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.45f))
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.LocationOn,
+                                imageVector = Icons.Default.LocationCity,
                                 contentDescription = null,
                                 tint = CyberCyan,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = weather.cityName,
                                 style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
                                 color = PureWhite
                             )
                         }
                         Text(
-                            text = "${weather.conditionTextRu} • Ощущается как ${weather.apparentTempC}°C",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = "${weather.regionAndCountry} • ${String.format("%.2f°, %.2f°", weather.latitude, weather.longitude)}",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 11.sp,
                             color = MutedSlate
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "${weather.conditionTextRu} • Ощущается как ${if (weather.apparentTempC > 0) "+${weather.apparentTempC}" else "${weather.apparentTempC}"}°C",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = CyberCyan
                         )
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "${weather.temperatureC}°C",
+                            text = "${if (weather.temperatureC > 0) "+${weather.temperatureC}" else "${weather.temperatureC}"}°C",
                             fontFamily = OrbitronFontFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 32.sp,
+                            fontSize = 30.sp,
                             color = SolarAmber
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Button(
+                        Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
                             onClick = onRefreshWeather,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = CyberCyan.copy(alpha = 0.2f),
-                                contentColor = CyberCyan
-                            ),
-                            shape = CircleShape,
-                            modifier = Modifier.testTag("refresh_weather_button")
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF141C2B))
+                                .testTag("refresh_weather_button")
                         ) {
                             if (isLoading) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    color = CyberCyan,
-                                    strokeWidth = 2.dp
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = CyberCyan
                                 )
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
-                                    contentDescription = "Обновить погоду",
-                                    modifier = Modifier.size(18.dp)
+                                    contentDescription = "Обновить прогноз погоды",
+                                    tint = CyberCyan
                                 )
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // 3 Weather Metric Tiles
+                // 6-Pill Real Atmospheric Telemetry Grid
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    WeatherMetricMiniCard(
+                    WeatherMetricMiniPill(
                         icon = Icons.Default.Air,
-                        label = "Ветер",
-                        value = "${weather.windSpeedKmh} км/ч",
-                        tint = IceBlue,
-                        modifier = Modifier.weight(1f)
-                    )
-                    WeatherMetricMiniCard(
-                        icon = Icons.Default.WaterDrop,
-                        label = "Влажность",
-                        value = "${weather.humidityPercent}%",
+                        label = "Ветер / Порывы",
+                        value = "${weather.windSpeedKmh}/${weather.windGustsKmh} км/ч",
                         tint = CyberCyan,
                         modifier = Modifier.weight(1f)
                     )
-                    WeatherMetricMiniCard(
-                        icon = Icons.Default.WbSunny,
-                        label = "Индекс УФ",
-                        value = "${weather.uvIndex}",
-                        tint = SolarAmber,
+                    WeatherMetricMiniPill(
+                        icon = Icons.Default.Compress,
+                        label = "Давление",
+                        value = "${weather.pressureMmHg} мм",
+                        tint = NeonMagenta,
+                        modifier = Modifier.weight(1f)
+                    )
+                    WeatherMetricMiniPill(
+                        icon = Icons.Default.WaterDrop,
+                        label = "Влажность",
+                        value = "${weather.humidityPercent}%",
+                        tint = EnergyEmerald,
                         modifier = Modifier.weight(1f)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    WeatherMetricMiniPill(
+                        icon = Icons.Default.Umbrella,
+                        label = "Вероятн. осадков",
+                        value = "${weather.precipitationProbPercent}%",
+                        tint = CyberCyan,
+                        modifier = Modifier.weight(1f)
+                    )
+                    WeatherMetricMiniPill(
+                        icon = Icons.Default.WbSunny,
+                        label = "УФ-Индекс",
+                        value = "${weather.uvIndex}",
+                        tint = SolarAmber,
+                        modifier = Modifier.weight(1f)
+                    )
+                    WeatherMetricMiniPill(
+                        icon = Icons.Default.Thermostat,
+                        label = "Ощущается",
+                        value = "${weather.apparentTempC}°C",
+                        tint = EnergyEmerald,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
-                // Hourly Temperature Curve Canvas
+                // 24-Hour Temperature Curve Canvas
                 Text(
-                    text = "Почасовой температурный профиль для AOD:",
+                    text = "ПОЧАСОВОЙ ПРОГНОЗ НА 24 ЧАСА (ШАГ 3 ЧАСА)",
                     fontFamily = ShareTechMonoFontFamily,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     color = MutedSlate
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                HourlyTemperatureGraph(weather = weather)
+
+                HourlyTemperatureCurveCanvas(
+                    points = weather.hourlyPoints.map { it.tempC },
+                    accentColor = config.palette.primaryColor
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    weather.hourlyPoints.forEach { pt ->
+                        Column(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF0E1420))
+                                .border(1.dp, ObsidianBorder, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "${if (pt.tempC > 0) "+${pt.tempC}" else "${pt.tempC}"}°",
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = PureWhite
+                            )
+                            Text(
+                                text = "${pt.precipProbPercent}%💧",
+                                fontSize = 9.sp,
+                                color = CyberCyan
+                            )
+                            Text(
+                                text = pt.hourLabel,
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontSize = 10.sp,
+                                color = MutedSlate
+                            )
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = onPushWeatherToIslandTicker,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("push_weather_to_island_ticker_btn"),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CyberCyan.copy(alpha = 0.18f),
+                        contentColor = CyberCyan
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Subtitles,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Вывести прогноз в бегущую строку Динамического Острова",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
 
-        // 2. City Selector
+        // 2. Global City Search (Open-Meteo Geocoding API) & Favorite Cities
         SectionHeaderRow(
-            icon = Icons.Default.LocationOn,
-            title = "Город для погодного виджета",
-            badgeText = config.selectedCity.nameRu
+            icon = Icons.Default.Public,
+            title = "Онлайн-Поиск Любого Города Мира",
+            badgeText = "${favoriteCities.size} в избранном"
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+            border = BorderStroke(1.dp, EnergyEmerald.copy(alpha = 0.45f))
         ) {
-            PredefinedWeatherCities.forEach { city ->
-                val selected = config.selectedCity.nameRu == city.nameRu
-                FilterChip(
-                    selected = selected,
-                    onClick = { onSelectCity(city) },
-                    label = { Text(city.nameRu) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = CyberCyan,
-                        selectedLabelColor = PitchBlack
-                    ),
-                    modifier = Modifier.testTag("weather_city_${city.nameRu}")
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Введите название любого города или поселка на русском или английском языке (живой поиск Open-Meteo Geocoding):",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MutedSlate
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = citySearchQuery,
+                        onValueChange = onSearchQueryChange,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("weather_city_search_input"),
+                        label = { Text("Поиск города (например: Калининград, Токио, Дубай)") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                tint = CyberCyan
+                            )
+                        },
+                        trailingIcon = {
+                            if (citySearchQuery.isNotBlank()) {
+                                IconButton(onClick = { onSearchQueryChange("") }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Очистить",
+                                        tint = MutedSlate
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyberCyan,
+                            unfocusedBorderColor = ObsidianBorder,
+                            focusedTextColor = PureWhite,
+                            unfocusedTextColor = PureWhite
+                        )
+                    )
+
+                    Button(
+                        onClick = onExecuteSearchNow,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyberCyan,
+                            contentColor = PitchBlack
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.testTag("weather_city_search_btn")
+                    ) {
+                        if (isSearchingCities) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = PitchBlack
+                            )
+                        } else {
+                            Text("Найти", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Live Geocoding Search Results Dropdown List
+                if (citySearchResults.isNotEmpty()) {
+                    Text(
+                        text = "НАЙДЕННЫЕ ГОРОДА (НАЖМИТЕ ДЛЯ ВЫБОРА И СОХРАНЕНИЯ):",
+                        fontFamily = ShareTechMonoFontFamily,
+                        fontSize = 10.sp,
+                        color = EnergyEmerald
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        citySearchResults.forEach { foundCity ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF101929))
+                                    .border(1.dp, CyberCyan.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                    .clickable { onSelectCity(foundCity) }
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = foundCity.nameRu,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PureWhite
+                                    )
+                                    Text(
+                                        text = foundCity.displaySubtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MutedSlate,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Text(
+                                    text = "Выбрать →",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberCyan
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = "ИЗБРАННЫЕ И БЫСТРЫЕ ГОРОДА",
+                    fontFamily = ShareTechMonoFontFamily,
+                    fontSize = 10.sp,
+                    color = CyberCyan
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    favoriteCities.forEach { city ->
+                        val isSelected = config.selectedCity.nameRu.equals(city.nameRu, ignoreCase = true)
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { onSelectCity(city) },
+                            label = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = city.nameRu,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                    if (favoriteCities.size > 2 && !isSelected) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Удалить из избранного",
+                                            modifier = Modifier
+                                                .size(13.dp)
+                                                .clickable { onRemoveFavoriteCity(city) },
+                                            tint = MutedSlate
+                                        )
+                                    }
+                                }
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = CyberCyan.copy(alpha = 0.22f),
+                                selectedLabelColor = CyberCyan,
+                                containerColor = Color(0xFF0E131D),
+                                labelColor = PureWhite
+                            ),
+                            modifier = Modifier.testTag("city_chip_${city.nameRu}")
+                        )
+                    }
+                }
             }
         }
 
-        // 3. Selectable AOD Weather Widget Styles
+        // 3. 7-Day Real Forecast Card
         SectionHeaderRow(
-            icon = Icons.Default.Widgets,
-            title = "Дизайн виджета погоды на AOD",
+            icon = Icons.Default.CalendarMonth,
+            title = "Реальный Прогноз на 7 Дней (${weather.cityName})",
+            badgeText = "7 суток"
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+            border = BorderStroke(1.dp, ObsidianBorder)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                weather.dailyPoints.forEach { day ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF0E131D))
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.width(105.dp)
+                        ) {
+                            Text(
+                                text = day.dayOfWeekRu,
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = CyberCyan,
+                                modifier = Modifier.width(26.dp)
+                            )
+                            Text(
+                                text = day.dateLabel,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PureWhite,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (day.weatherCode <= 1) Icons.Default.WbSunny else Icons.Default.Cloud,
+                                contentDescription = null,
+                                tint = if (day.weatherCode <= 1) SolarAmber else CyberCyan,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "${day.precipitationProbPercent}%💧",
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontSize = 11.sp,
+                                color = MutedSlate
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "мин ${if (day.tempMinC > 0) "+${day.tempMinC}" else "${day.tempMinC}"}°",
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontSize = 11.sp,
+                                color = MutedSlate
+                            )
+                            Text(
+                                text = "макс ${if (day.tempMaxC > 0) "+${day.tempMaxC}" else "${day.tempMaxC}"}°C",
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = SolarAmber
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. AOD Weather Widget Layout Selector
+        SectionHeaderRow(
+            icon = Icons.Default.Thermostat,
+            title = "Макет Виджета Погоды на Экране AOD",
             badgeText = config.weatherWidgetStyle.titleRu
         )
 
@@ -245,85 +601,86 @@ fun WeatherAndWidgetsSection(
             colors = CardDefaults.cardColors(containerColor = ObsidianCard),
             border = BorderStroke(1.dp, ObsidianBorder)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                SettingToggleRow(
-                    title = "Интегрировать погоду в Always On Display",
-                    subtitle = "Автоматическое энергосберегающее обновление прогноза",
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Отображать погоду на Always On Display",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = PureWhite
+                    )
+                    Text(
+                        text = "Энергоэффективный рендеринг под часами (< 0.28% OPR)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MutedSlate
+                    )
+                }
+                Switch(
                     checked = config.showWeatherOnAod,
-                    onCheckedChange = onToggleShowWeatherOnAod
+                    onCheckedChange = onToggleShowWeatherOnAod,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = PitchBlack,
+                        checkedTrackColor = CyberCyan
+                    )
                 )
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            WeatherWidgetStyle.entries.forEach { style ->
-                val selected = config.weatherWidgetStyle == style
-                Card(
+        WeatherWidgetStyle.entries.forEach { style ->
+            val selected = config.weatherWidgetStyle == style
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelectWidgetStyle(style) }
+                    .testTag("weather_style_${style.id}"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (selected) Color(0xFF141E30) else ObsidianCard
+                ),
+                border = BorderStroke(
+                    width = if (selected) 1.5.dp else 1.dp,
+                    color = if (selected) CyberCyan else ObsidianBorder
+                )
+            ) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onSelectWidgetStyle(style) }
-                        .testTag("weather_widget_style_${style.id}"),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (selected) Color(0xFF101F30) else ObsidianCard
-                    ),
-                    border = BorderStroke(
-                        width = if (selected) 1.5.dp else 1.dp,
-                        color = if (selected) CyberCyan else ObsidianBorder
-                    )
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = style.titleRu,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = if (selected) CyberCyan else PureWhite
-                                )
-                                Text(
-                                    text = style.descriptionRu,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontSize = 11.sp,
-                                    color = MutedSlate
-                                )
-                            }
-                            if (selected) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(EnergyEmerald.copy(alpha = 0.2f))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                                ) {
-                                    Text(
-                                        text = "АКТИВЕН",
-                                        fontFamily = ShareTechMonoFontFamily,
-                                        fontSize = 10.sp,
-                                        color = EnergyEmerald
-                                    )
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = style.titleRu,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (selected) CyberCyan else PureWhite
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = style.descriptionRu,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MutedSlate
+                        )
+                    }
+                    if (selected) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(PitchBlack)
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center
+                                .clip(RoundedCornerShape(50))
+                                .background(CyberCyan.copy(alpha = 0.2f))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
-                            AodWeatherWidgetView(
-                                style = style,
-                                weather = weather,
-                                primaryColor = config.palette.primaryColor,
-                                secondaryColor = config.palette.secondaryColor
+                            Text(
+                                text = "Активен",
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontSize = 10.sp,
+                                color = CyberCyan
                             )
                         }
                     }
@@ -334,113 +691,90 @@ fun WeatherAndWidgetsSection(
 }
 
 @Composable
-private fun WeatherMetricMiniCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+private fun WeatherMetricMiniPill(
+    icon: ImageVector,
     label: String,
     value: String,
     tint: Color,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    Row(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF0B101A))
-            .padding(horizontal = 10.dp, vertical = 10.dp)
+            .background(Color(0xFF0E131D))
+            .border(1.dp, ObsidianBorder, RoundedCornerShape(14.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
         Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = tint,
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontSize = 11.sp,
-                    color = MutedSlate
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = label,
+                fontSize = 9.sp,
+                color = MutedSlate,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             Text(
                 text = value,
                 fontFamily = ShareTechMonoFontFamily,
-                fontSize = 15.sp,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
                 color = PureWhite,
-                fontWeight = FontWeight.Bold
+                maxLines = 1
             )
         }
     }
 }
 
 @Composable
-private fun HourlyTemperatureGraph(weather: WeatherSnapshot) {
-    val points = weather.hourlyPoints
-    if (points.isEmpty()) return
-
-    val minT = (points.minOfOrNull { it.tempC } ?: 10) - 2
-    val maxT = (points.maxOfOrNull { it.tempC } ?: 25) + 2
-    val range = (maxT - minT).coerceAtLeast(4)
-
-    Column(
+private fun HourlyTemperatureCurveCanvas(
+    points: List<Int>,
+    accentColor: Color
+) {
+    if (points.size < 2) return
+    Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(PitchBlack)
-            .padding(12.dp)
+            .height(52.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(64.dp)
-        ) {
-            val stepX = size.width / (points.size - 1).coerceAtLeast(1)
-            val path = Path()
-            points.forEachIndexed { idx, pt ->
-                val x = idx * stepX
-                val normY = 1f - ((pt.tempC - minT).toFloat() / range.toFloat())
-                val y = 10.dp.toPx() + normY * (size.height - 20.dp.toPx())
-                if (idx == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-            drawPath(
-                path = path,
-                brush = Brush.horizontalGradient(listOf(CyberCyan, SolarAmber, NeonMagenta)),
-                style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-            )
-            points.forEachIndexed { idx, pt ->
-                val x = idx * stepX
-                val normY = 1f - ((pt.tempC - minT).toFloat() / range.toFloat())
-                val y = 10.dp.toPx() + normY * (size.height - 20.dp.toPx())
-                drawCircle(
-                    color = PureWhite,
-                    radius = 4.dp.toPx(),
-                    center = Offset(x, y)
-                )
-            }
+        val minT = (points.minOrNull() ?: 0) - 1
+        val maxT = (points.maxOrNull() ?: 25) + 1
+        val span = (maxT - minT).coerceAtLeast(1).toFloat()
+        val stepX = size.width / (points.size - 1)
+
+        val path = Path()
+        val offsets = points.mapIndexed { idx, temp ->
+            val x = idx * stepX
+            val normalized = (temp - minT) / span
+            val y = size.height - (normalized * size.height)
+            Offset(x, y)
         }
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            points.forEach { pt ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "${pt.tempC}°C",
-                        fontFamily = ShareTechMonoFontFamily,
-                        fontSize = 11.sp,
-                        color = CyberCyan
-                    )
-                    Text(
-                        text = pt.hourLabel,
-                        fontFamily = ShareTechMonoFontFamily,
-                        fontSize = 10.sp,
-                        color = MutedSlate
-                    )
-                }
-            }
+
+        offsets.forEachIndexed { idx, pt ->
+            if (idx == 0) path.moveTo(pt.x, pt.y)
+            else path.lineTo(pt.x, pt.y)
+        }
+
+        drawPath(
+            path = path,
+            brush = Brush.horizontalGradient(listOf(accentColor, SolarAmber)),
+            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+        )
+
+        offsets.forEach { pt ->
+            drawCircle(
+                color = PureWhite,
+                radius = 3.5.dp.toPx(),
+                center = pt
+            )
         }
     }
 }

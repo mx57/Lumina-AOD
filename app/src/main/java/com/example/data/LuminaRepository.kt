@@ -9,7 +9,10 @@ import com.example.model.ClockFaceStyle
 import com.example.model.EdgeLightingStyle
 import com.example.model.IslandAnchorPreset
 import com.example.model.IslandShapeStyle
+import com.example.model.IslandTapAction
+import com.example.model.IslandVisibilityMode
 import com.example.model.PredefinedWeatherCities
+import com.example.model.WeatherCityOption
 import com.example.model.WeatherWidgetStyle
 import kotlinx.coroutines.flow.Flow
 
@@ -26,10 +29,50 @@ class LuminaRepository(
     val appColorRulesFlow: Flow<List<AppColorRuleEntity>> = dao.observeAppColorRules()
     val recentNotificationsFlow: Flow<List<NotificationLogEntity>> = dao.observeRecentNotifications()
 
+    fun loadFavoriteCities(): List<WeatherCityOption> {
+        val sp = prefs ?: return PredefinedWeatherCities
+        val raw = sp.getString("favoriteCitiesSerialized", null)
+        if (raw.isNullOrBlank()) return PredefinedWeatherCities
+        val parsed = raw.split(";;").mapNotNull { entry ->
+            val parts = entry.split("|")
+            if (parts.size >= 5) {
+                val name = parts[0]
+                val lat = parts[1].toDoubleOrNull() ?: return@mapNotNull null
+                val lon = parts[2].toDoubleOrNull() ?: return@mapNotNull null
+                val country = parts[3]
+                val admin1 = parts[4]
+                val elev = parts.getOrNull(5)?.toIntOrNull() ?: 120
+                WeatherCityOption(name, lat, lon, country, admin1, elev)
+            } else null
+        }
+        return if (parsed.isNotEmpty()) parsed else PredefinedWeatherCities
+    }
+
+    fun saveFavoriteCities(cities: List<WeatherCityOption>) {
+        val sp = prefs ?: return
+        val serialized = cities.joinToString(";;") { c ->
+            "${c.nameRu.replace("|", " ")}|${c.latitude}|${c.longitude}|${c.countryRu.replace("|", " ")}|${c.admin1Ru.replace("|", " ")}|${c.elevationM}"
+        }
+        sp.edit().putString("favoriteCitiesSerialized", serialized).apply()
+    }
+
     fun loadPersistedConfig(): AodConfigurationState {
         val sp = prefs ?: return AodConfigurationState()
-        val cityName = sp.getString("selectedCityName", PredefinedWeatherCities.first().nameRu)
-        val city = PredefinedWeatherCities.find { it.nameRu == cityName } ?: PredefinedWeatherCities.first()
+        val defaultCity = PredefinedWeatherCities.first()
+        val cityName = sp.getString("selectedCityName", defaultCity.nameRu) ?: defaultCity.nameRu
+        val cityLat = sp.getFloat("selectedCityLat", defaultCity.latitude.toFloat()).toDouble()
+        val cityLon = sp.getFloat("selectedCityLon", defaultCity.longitude.toFloat()).toDouble()
+        val cityCountry = sp.getString("selectedCityCountry", defaultCity.countryRu) ?: defaultCity.countryRu
+        val cityAdmin = sp.getString("selectedCityAdmin", defaultCity.admin1Ru) ?: defaultCity.admin1Ru
+        val cityElev = sp.getInt("selectedCityElev", defaultCity.elevationM)
+        val city = WeatherCityOption(
+            nameRu = cityName,
+            latitude = cityLat,
+            longitude = cityLon,
+            countryRu = cityCountry,
+            admin1Ru = cityAdmin,
+            elevationM = cityElev
+        )
 
         return AodConfigurationState(
             isAodEnabled = sp.getBoolean("isAodEnabled", true),
@@ -60,6 +103,8 @@ class LuminaRepository(
             cameraRingRadiusDp = sp.getFloat("cameraRingRadiusDp", 15f),
             cameraRingThicknessDp = sp.getFloat("cameraRingThicknessDp", 3.2f),
             islandShape = IslandShapeStyle.fromId(sp.getString("islandShape", IslandShapeStyle.SPLIT_DROP.id) ?: ""),
+            islandVisibilityMode = IslandVisibilityMode.fromId(sp.getString("islandVisibilityMode", IslandVisibilityMode.ALWAYS_VISIBLE.id) ?: ""),
+            islandTapAction = IslandTapAction.fromId(sp.getString("islandTapAction", IslandTapAction.EXPAND_THEN_OPEN_APP.id) ?: ""),
             islandAnchor = IslandAnchorPreset.fromId(sp.getString("islandAnchor", IslandAnchorPreset.TOP_CENTER.id) ?: ""),
             islandOffsetXDp = sp.getFloat("islandOffsetXDp", 0f),
             islandOffsetYDp = sp.getFloat("islandOffsetYDp", 8f),
@@ -73,6 +118,14 @@ class LuminaRepository(
             islandSpringBounciness = sp.getFloat("islandSpringBounciness", 0.75f),
             islandBorderWidthDp = sp.getFloat("islandBorderWidthDp", 1.4f),
             islandAutoCollapseSec = sp.getInt("islandAutoCollapseSec", 8),
+            islandMarqueeEnabled = sp.getBoolean("islandMarqueeEnabled", true),
+            islandMarqueeSpeed = sp.getFloat("islandMarqueeSpeed", 1.0f),
+            islandMarqueeFontSizeSp = sp.getFloat("islandMarqueeFontSizeSp", 12f),
+            islandCustomTickerText = sp.getString("islandCustomTickerText", "") ?: "",
+            islandShowWeatherInTicker = sp.getBoolean("islandShowWeatherInTicker", true),
+            islandPrivacyDotEnabled = sp.getBoolean("islandPrivacyDotEnabled", true),
+            islandLiveEqualizerEnabled = sp.getBoolean("islandLiveEqualizerEnabled", true),
+            islandQuickTorchEnabled = sp.getBoolean("islandQuickTorchEnabled", true),
             weatherWidgetStyle = WeatherWidgetStyle.fromId(sp.getString("weatherWidgetStyle", WeatherWidgetStyle.COMPACT_PILL.id) ?: ""),
             selectedCity = city,
             proximityPocketMode = sp.getBoolean("proximityPocketMode", true),
@@ -120,6 +173,8 @@ class LuminaRepository(
             .putFloat("cameraRingRadiusDp", config.cameraRingRadiusDp)
             .putFloat("cameraRingThicknessDp", config.cameraRingThicknessDp)
             .putString("islandShape", config.islandShape.id)
+            .putString("islandVisibilityMode", config.islandVisibilityMode.id)
+            .putString("islandTapAction", config.islandTapAction.id)
             .putString("islandAnchor", config.islandAnchor.id)
             .putFloat("islandOffsetXDp", config.islandOffsetXDp)
             .putFloat("islandOffsetYDp", config.islandOffsetYDp)
@@ -133,8 +188,21 @@ class LuminaRepository(
             .putFloat("islandSpringBounciness", config.islandSpringBounciness)
             .putFloat("islandBorderWidthDp", config.islandBorderWidthDp)
             .putInt("islandAutoCollapseSec", config.islandAutoCollapseSec)
+            .putBoolean("islandMarqueeEnabled", config.islandMarqueeEnabled)
+            .putFloat("islandMarqueeSpeed", config.islandMarqueeSpeed)
+            .putFloat("islandMarqueeFontSizeSp", config.islandMarqueeFontSizeSp)
+            .putString("islandCustomTickerText", config.islandCustomTickerText)
+            .putBoolean("islandShowWeatherInTicker", config.islandShowWeatherInTicker)
+            .putBoolean("islandPrivacyDotEnabled", config.islandPrivacyDotEnabled)
+            .putBoolean("islandLiveEqualizerEnabled", config.islandLiveEqualizerEnabled)
+            .putBoolean("islandQuickTorchEnabled", config.islandQuickTorchEnabled)
             .putString("weatherWidgetStyle", config.weatherWidgetStyle.id)
             .putString("selectedCityName", config.selectedCity.nameRu)
+            .putFloat("selectedCityLat", config.selectedCity.latitude.toFloat())
+            .putFloat("selectedCityLon", config.selectedCity.longitude.toFloat())
+            .putString("selectedCityCountry", config.selectedCity.countryRu)
+            .putString("selectedCityAdmin", config.selectedCity.admin1Ru)
+            .putInt("selectedCityElev", config.selectedCity.elevationM)
             .putBoolean("proximityPocketMode", config.proximityPocketMode)
             .putBoolean("pixelShiftEnabled", config.pixelShiftEnabled)
             .putBoolean("burnInCheckerboard", config.burnInCheckerboard)
@@ -174,7 +242,7 @@ class LuminaRepository(
                     paletteId = AodColorPalette.NOTHING_RED_MONO.id,
                     ringModeId = CameraRingMode.NOTIFICATION_LED_ONLY.id,
                     weatherStyleId = WeatherWidgetStyle.MINIMAL_TEXT.id,
-                    islandShapeId = IslandShapeStyle.ULTRA_THREAD.id
+                    islandShapeId = IslandShapeStyle.MATRIX_TICKER_BAR.id
                 ),
                 AodPresetEntity(
                     name = "Cosmic Metaball Sphere",
@@ -187,14 +255,14 @@ class LuminaRepository(
                     islandShapeId = IslandShapeStyle.LIQUID_SPHERE.id
                 ),
                 AodPresetEntity(
-                    name = "Retro Flip & Energy Ring",
-                    badgeTag = "Классика + Батарея",
+                    name = "Dual Wings & Audio Wave",
+                    badgeTag = "Крылья • Эквалайзер",
                     clockStyleId = ClockFaceStyle.RETRO_FLIP_CLOCK.id,
                     edgeStyleId = EdgeLightingStyle.BREATHING_GLOW.id,
                     paletteId = AodColorPalette.SOLAR_FLARE.id,
                     ringModeId = CameraRingMode.BATTERY_ENERGY_RING.id,
                     weatherStyleId = WeatherWidgetStyle.HOURLY_CURVE.id,
-                    islandShapeId = IslandShapeStyle.CAPSULE.id
+                    islandShapeId = IslandShapeStyle.DUAL_CYBER_WINGS.id
                 ),
                 AodPresetEntity(
                     name = "Cyber Hexagon Visor",
@@ -320,7 +388,7 @@ class LuminaRepository(
                     appName = "Telegram",
                     packageName = "org.telegram.messenger",
                     senderOrTitle = "Алексей • Дизайн-команда",
-                    messageBody = "Жидкий морфинг 120Hz и перетаскивание Острова активированы!",
+                    messageBody = "Жидкий морфинг 120Hz, бегущая строка и переход в приложение по тапу готовы!",
                     colorHex = 0xFF38BDF8,
                     wasBlockedByFilter = false
                 ),
