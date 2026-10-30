@@ -25,6 +25,7 @@ import com.example.model.IslandShapeStyle
 import com.example.model.IslandTapAction
 import com.example.model.IslandTimerState
 import com.example.model.IslandVisibilityMode
+import com.example.model.SmartProfilePreset
 import com.example.model.SystemPermissionStatus
 import com.example.model.WeatherCityOption
 import com.example.model.WeatherSnapshot
@@ -237,6 +238,11 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
                     _callState.update { state ->
                         state.copy(callDurationSeconds = state.callDurationSeconds + 1)
                     }
+                }
+
+                if (_config.value.pomodoroActive && _config.value.pomodoroRemainingSec > 0) {
+                    val nextPom = (_config.value.pomodoroRemainingSec - 1).coerceAtLeast(0)
+                    _config.update { it.copy(pomodoroRemainingSec = nextPom, pomodoroActive = nextPom > 0) }
                 }
 
                 if (tickSeconds % 60 == 0 && _config.value.pixelShiftEnabled) {
@@ -1151,6 +1157,132 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
     fun clearNotificationLogs() {
         viewModelScope.launch {
             repository.clearNotifications()
+        }
+    }
+
+    // 8 New Innovations Controls
+    fun togglePreviewCollapsed() {
+        updateConfigAndPersist { it.copy(isPreviewCollapsed = !it.isPreviewCollapsed) }
+    }
+
+    fun toggleQuickDock(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(isQuickDockEnabled = enabled) }
+    }
+
+    fun toggleShowPinnedMemo(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(showPinnedMemoOnAod = enabled) }
+    }
+
+    fun updatePinnedMemoText(text: String) {
+        updateConfigAndPersist { it.copy(pinnedMemoText = text) }
+    }
+
+    fun togglePomodoroTimer() {
+        val next = !_config.value.pomodoroActive
+        updateConfigAndPersist {
+            it.copy(
+                pomodoroActive = next,
+                pomodoroRemainingSec = if (it.pomodoroRemainingSec <= 0) 1500 else it.pomodoroRemainingSec
+            )
+        }
+        showTemporaryBanner(if (next) "Фокус-таймер Pomodoro (25 мин) запущен на AOD" else "Таймер Pomodoro на паузе")
+    }
+
+    fun resetPomodoroTimer() {
+        updateConfigAndPersist { it.copy(pomodoroRemainingSec = 1500, pomodoroActive = true) }
+        showTemporaryBanner("Таймер Pomodoro сброшен на 25:00 и запущен")
+    }
+
+    fun toggleStandByNightMode(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(standByNightModeEnabled = enabled) }
+        showTemporaryBanner(
+            if (enabled) "Включен прикроватный режим StandBy (OPR < 0.9%)"
+            else "Выход из ночного режима StandBy"
+        )
+    }
+
+    fun toggleStandByAutoOnCharging(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(standByAutoOnCharging = enabled) }
+    }
+
+    fun toggleStandByRedTintOnly(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(standByRedTintOnly = enabled) }
+    }
+
+    fun toggleIceCardEnabled(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(iceCardEnabled = enabled) }
+    }
+
+    fun updateIceCardDetails(ownerName: String, emergencyPhone: String, note: String) {
+        updateConfigAndPersist {
+            it.copy(
+                iceOwnerName = ownerName,
+                iceEmergencyPhone = emergencyPhone,
+                iceMedicalOrNote = note
+            )
+        }
+    }
+
+    fun setIceQrModalVisible(visible: Boolean) {
+        _config.update { it.copy(isIceQrModalVisible = visible) }
+        if (visible) {
+            showTemporaryBanner("Открыта экстренная ICE-визитка с QR-кодом владельца")
+        }
+    }
+
+    fun toggleBarometerAndCompass(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(showBarometerAndCompassOnAod = enabled) }
+    }
+
+    fun rotateSimulatedCompass() {
+        val nextDeg = (_config.value.compassAzimuthDeg + 45) % 360
+        val nextDelta = when {
+            _config.value.barometricDeltaMmHg < -1.0f -> 0.4f
+            _config.value.barometricDeltaMmHg < 1.0f -> 2.1f
+            else -> -2.4f
+        }
+        updateConfigAndPersist {
+            it.copy(
+                compassAzimuthDeg = nextDeg,
+                barometricDeltaMmHg = nextDelta
+            )
+        }
+        showTemporaryBanner("Компас: $nextDeg° • Барометрический тренд: ${if (nextDelta >= 0) "+$nextDelta" else "$nextDelta"} мм рт. ст.")
+    }
+
+    fun applySmartProfile(profile: SmartProfilePreset) {
+        updateConfigAndPersist {
+            it.copy(
+                activeSmartProfile = profile,
+                clockStyle = profile.clockStyle,
+                edgeStyle = profile.edgeStyle,
+                palette = profile.palette,
+                islandShape = profile.islandShape,
+                standByNightModeEnabled = profile.standByMode,
+                standByRedTintOnly = profile == SmartProfilePreset.NIGHT_STANDBY,
+                pomodoroActive = profile == SmartProfilePreset.WORK_FOCUS || it.pomodoroActive
+            )
+        }
+        showTemporaryBanner("Активирован сценарий: «${profile.titleRu}»")
+        syncNotificationShade()
+    }
+
+    fun exportConfigurationJson(): String {
+        val json = repository.exportConfigToJson(_config.value)
+        showTemporaryBanner("JSON-код темы скопирован и готов к экспорту")
+        return json
+    }
+
+    fun importConfigurationJson(rawJson: String): Boolean {
+        val parsed = repository.importConfigFromJson(rawJson, _config.value)
+        return if (parsed != null) {
+            updateConfigAndPersist { parsed }
+            showTemporaryBanner("Конфигурация успешно импортирована из JSON!")
+            syncNotificationShade()
+            true
+        } else {
+            showTemporaryBanner("Ошибка формата JSON: проверьте скопированный код темы")
+            false
         }
     }
 

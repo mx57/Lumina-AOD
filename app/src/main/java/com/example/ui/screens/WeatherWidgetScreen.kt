@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Compress
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.LocationCity
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
@@ -97,7 +98,9 @@ fun WeatherWidgetCustomizationSection(
     onSelectWidgetStyle: (WeatherWidgetStyle) -> Unit,
     onToggleShowWeatherOnAod: (Boolean) -> Unit,
     onRefreshWeather: () -> Unit,
-    onPushWeatherToIslandTicker: () -> Unit = {}
+    onPushWeatherToIslandTicker: () -> Unit = {},
+    onToggleBarometerCompass: (Boolean) -> Unit = {},
+    onRotateCompassTest: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -316,6 +319,89 @@ fun WeatherWidgetCustomizationSection(
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp
                     )
+                }
+            }
+        }
+
+        // 1b. Barometric Storm Radar & GPS Compass Card (New v3.0 Innovation)
+        SectionHeaderRow(
+            icon = Icons.Default.Explore,
+            title = "Барометрический Шторм-Радар и GPS Компас",
+            badgeText = "${weather.pressureMmHg} мм • ${config.compassAzimuthDeg}°"
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+            border = BorderStroke(1.dp, NeonMagenta.copy(alpha = 0.45f))
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                val compassDir = when (((config.compassAzimuthDeg % 360) + 360) % 360) {
+                    in 23..67 -> "СВ (Северо-Восток)"
+                    in 68..112 -> "В (Восток)"
+                    in 113..157 -> "ЮВ (Юго-Восток)"
+                    in 158..202 -> "Ю (Юг)"
+                    in 203..247 -> "ЮЗ (Юго-Запад)"
+                    in 248..292 -> "З (Запад)"
+                    in 293..337 -> "СЗ (Северо-Запад)"
+                    else -> "С (Север)"
+                }
+                val baroTrendRu = when {
+                    config.barometricDeltaMmHg <= -2.0f -> "Резкое падение (Приближение циклона / осадков)"
+                    config.barometricDeltaMmHg >= 2.0f -> "Рост давления (Антициклон / прояснение)"
+                    else -> "Барометрический фон стабилен"
+                }
+
+                SettingToggleRow(
+                    title = "Показывать барометр и компас на экране AOD",
+                    subtitle = "Индикатор азимута и тренда атмосферного давления под часами",
+                    checked = config.showBarometerAndCompassOnAod,
+                    onCheckedChange = onToggleBarometerCompass,
+                    testTag = "toggle_barometer_compass_switch"
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF0E1420))
+                        .border(1.dp, ObsidianBorder, RoundedCornerShape(14.dp))
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Курс: $compassDir (${config.compassAzimuthDeg}°)",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = CyberCyan
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Тренд 3ч: ${String.format("%+.1f", config.barometricDeltaMmHg)} мм рт. ст. • $baroTrendRu",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.sp,
+                            color = if (config.barometricDeltaMmHg <= -2.0f) SolarAmber else EnergyEmerald
+                        )
+                    }
+
+                    Button(
+                        onClick = onRotateCompassTest,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = NeonMagenta.copy(alpha = 0.2f),
+                            contentColor = NeonMagenta
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.testTag("rotate_compass_test_btn")
+                    ) {
+                        Text("Поворот +35°", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

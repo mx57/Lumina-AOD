@@ -521,8 +521,82 @@ data class WeatherSnapshot(
     val isLiveNetwork: Boolean = false
 )
 
+enum class SmartProfilePreset(
+    val id: String,
+    val titleRu: String,
+    val subtitleRu: String,
+    val badgeRu: String,
+    val clockStyle: ClockFaceStyle,
+    val edgeStyle: EdgeLightingStyle,
+    val palette: AodColorPalette,
+    val islandShape: IslandShapeStyle,
+    val standByMode: Boolean = false
+) {
+    WORK_FOCUS(
+        id = "work_focus",
+        titleRu = "Работа и Фокус (Pomodoro)",
+        subtitleRu = "Четкий цифровой циферблат, заметка и таймер концентрации на AOD",
+        badgeRu = "ФОКУС",
+        clockStyle = ClockFaceStyle.CYBER_PULSE,
+        edgeStyle = EdgeLightingStyle.CORNER_SPARKS,
+        palette = AodColorPalette.CYBER_CYAN_MAGENTA,
+        islandShape = IslandShapeStyle.CAPSULE,
+        standByMode = false
+    ),
+    NIGHT_STANDBY(
+        id = "night_standby",
+        titleRu = "Ночной Прикроватный (StandBy)",
+        subtitleRu = "Крупные неслепящие часы в янтарно-красном спектре (OPR < 0.9%)",
+        badgeRu = "НОЧЬ 0.8%",
+        clockStyle = ClockFaceStyle.PIXEL_ULTRA_THIN,
+        edgeStyle = EdgeLightingStyle.OFF,
+        palette = AodColorPalette.NOTHING_RED_MONO,
+        islandShape = IslandShapeStyle.HIDDEN_OUTLINE,
+        standByMode = true
+    ),
+    CHARGING_TURBO(
+        id = "charging_turbo",
+        titleRu = "Зарядка AMOLED Turbo",
+        subtitleRu = "Орбитальная сфера, бегущая волна по краям и индикатор заряда",
+        badgeRu = "TURBO 120HZ",
+        clockStyle = ClockFaceStyle.COSMIC_ORBIT_SPHERE,
+        edgeStyle = EdgeLightingStyle.NEON_WAVE,
+        palette = AodColorPalette.AURORA_EMERALD,
+        islandShape = IslandShapeStyle.SPLIT_DROP,
+        standByMode = false
+    ),
+    MUSIC_PARTY(
+        id = "music_party",
+        titleRu = "Музыка и Эквалайзер Muviz",
+        subtitleRu = "Живые метаболы, частотный спектр по граням и остров-волна",
+        badgeRu = "АУДИО СПЕКТР",
+        clockStyle = ClockFaceStyle.AURORA_METABALLS,
+        edgeStyle = EdgeLightingStyle.AUDIO_SPECTRUM,
+        palette = AodColorPalette.COSMIC_VIOLET,
+        islandShape = IslandShapeStyle.AUDIO_SPECTRUM_WAVE,
+        standByMode = false
+    ),
+    ULTRA_ECO(
+        id = "ultra_eco",
+        titleRu = "Ультра-Эко Nothing Glyph",
+        subtitleRu = "Точечная матрица и появление Острова только при новых пушах",
+        badgeRu = "ЭКО 0.9%",
+        clockStyle = ClockFaceStyle.NOTHING_DOT_MATRIX,
+        edgeStyle = EdgeLightingStyle.OFF,
+        palette = AodColorPalette.NOTHING_RED_MONO,
+        islandShape = IslandShapeStyle.ULTRA_THREAD,
+        standByMode = false
+    );
+
+    companion object {
+        fun fromId(id: String): SmartProfilePreset =
+            entries.find { it.id == id } ?: WORK_FOCUS
+    }
+}
+
 data class AodConfigurationState(
     val isAodEnabled: Boolean = true,
+    val isPreviewCollapsed: Boolean = false,
     val clockStyle: ClockFaceStyle = ClockFaceStyle.CYBER_PULSE,
     val edgeStyle: EdgeLightingStyle = EdgeLightingStyle.NEON_WAVE,
     val palette: AodColorPalette = AodColorPalette.CYBER_CYAN_MAGENTA,
@@ -581,9 +655,27 @@ data class AodConfigurationState(
     val islandTemporaryDismissed: Boolean = false,
     val activeIslandType: IslandActivityType = IslandActivityType.MEDIA_PLAYER,
     val isIslandExpanded: Boolean = false,
-    // Weather Widget
+    // Weather Widget & Barometric/Compass Radar
     val weatherWidgetStyle: WeatherWidgetStyle = WeatherWidgetStyle.COMPACT_PILL,
     val selectedCity: WeatherCityOption = PredefinedWeatherCities.first(),
+    val showBarometerAndCompassOnAod: Boolean = true,
+    val compassAzimuthDeg: Int = 48,
+    val barometricDeltaMmHg: Float = -1.6f,
+    // 8 New Innovations: Quick Dock, Pinned Memo & Pomodoro, StandBy Night Mode, ICE QR Card, Smart Profiles
+    val isQuickDockEnabled: Boolean = true,
+    val showPinnedMemoOnAod: Boolean = true,
+    val pinnedMemoText: String = "Фокус: релиз v3.0 • Встреча в 16:00",
+    val pomodoroActive: Boolean = false,
+    val pomodoroRemainingSec: Int = 1500,
+    val standByNightModeEnabled: Boolean = false,
+    val standByAutoOnCharging: Boolean = true,
+    val standByRedTintOnly: Boolean = false,
+    val iceCardEnabled: Boolean = true,
+    val iceOwnerName: String = "Алексей • Владелец",
+    val iceEmergencyPhone: String = "+7 (999) 412-88-04",
+    val iceMedicalOrNote: String = "При обнаружении телефона, пожалуйста, свяжитесь по номеру выше или отсканируйте QR",
+    val isIceQrModalVisible: Boolean = false,
+    val activeSmartProfile: SmartProfilePreset = SmartProfilePreset.WORK_FOCUS,
     // Power & Deep Sleep
     val proximityPocketMode: Boolean = true,
     val pixelShiftEnabled: Boolean = true,
@@ -615,6 +707,10 @@ data class AodConfigurationState(
 
     fun calculateOprPercentage(): Float {
         if (!isAodEnabled || isManualDeepSleepActive) return 0.0f
+        if (standByNightModeEnabled) {
+            val baseStandBy = if (standByRedTintOnly) 0.68f else 0.88f
+            return ((baseStandBy * (0.5f + aodBrightness * 0.5f) * 100f).roundToInt() / 100f).coerceIn(0.3f, 2.5f)
+        }
         var opr = clockStyle.baseOprPercent * clockScale
         opr += edgeStyle.oprAddition
         if (isCameraRingEnabled) opr += 0.18f
@@ -629,6 +725,7 @@ data class AodConfigurationState(
             opr += (if (isIslandExpanded) 1.45f else 0.35f) * islandWidthScale * shapeFactor * visFactor
         }
         if (showWeatherOnAod) opr += 0.28f
+        if (isQuickDockEnabled) opr += 0.14f
         if (burnInCheckerboard) opr *= 0.72f
         opr *= (0.5f + aodBrightness * 0.5f)
         return ((opr * 100f).roundToInt() / 100f).coerceIn(0.1f, 8.5f)

@@ -1,3 +1,4 @@
+// File: app/src/main/java/com/example/MainActivity.kt
 package com.example
 
 import android.Manifest
@@ -53,7 +54,6 @@ import androidx.compose.material.icons.outlined.CameraFront
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.WatchLater
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -189,7 +189,6 @@ fun LuminaAodAppRoot(
         onResult = { viewModel.refreshPermissionStatus() }
     )
 
-    // Auto-refresh permission checks whenever user returns from Android Settings
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -217,32 +216,6 @@ fun LuminaAodAppRoot(
             modifier = Modifier.fillMaxSize(),
             containerColor = PitchBlack,
             contentWindowInsets = WindowInsets.safeDrawing,
-            floatingActionButton = {
-                if (!isFullScreenAod) {
-                    FloatingActionButton(
-                        onClick = { viewModel.setFullScreenAodActive(true) },
-                        containerColor = CyberCyan,
-                        contentColor = PitchBlack,
-                        modifier = Modifier.testTag("fab_launch_live_aod")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = stringResource(R.string.launch_live_aod)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Экран AOD",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
-            },
             bottomBar = {
                 NavigationBar(
                     containerColor = ObsidianSurface,
@@ -299,28 +272,23 @@ fun LuminaAodAppRoot(
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        top = 12.dp,
-                        bottom = 96.dp
+                        top = 10.dp,
+                        bottom = 32.dp
                     ),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // 1. Top Hero Banner & Master Controls
+                    // 1. Unified Compact Top Header & Permissions Bar
                     item {
-                        LuminaStudioHeaderCard(
+                        LuminaUnifiedTopHeaderCard(
                             isAodEnabled = config.isAodEnabled,
                             isDeepSleep = config.isManualDeepSleepActive,
                             oprPercent = config.calculateOprPercentage(),
+                            permissionStatus = permissionStatus,
                             onToggleAod = viewModel::toggleAodEnabled,
                             onToggleDeepSleep = {
                                 viewModel.toggleManualDeepSleep(!config.isManualDeepSleepActive)
-                            }
-                        )
-                    }
-
-                    // 2. Quick Permissions & Event Diagnostics Strip (1-tap access to permissions & test push)
-                    item {
-                        PermissionsAndQuickEventStrip(
-                            permissionStatus = permissionStatus,
+                            },
+                            onLaunchFullScreenAod = { viewModel.setFullScreenAodActive(true) },
                             onOpenNotificationListener = { LuminaPermissionHelper.openNotificationListenerSettings(context) },
                             onOpenOverlayPermission = { LuminaPermissionHelper.openOverlayPermissionSettings(context) },
                             onGoToSystemTab = { currentTab = 4 },
@@ -332,66 +300,75 @@ fun LuminaAodAppRoot(
                         )
                     }
 
-                    // 3. Live Notification Toast Banner
-                    item {
-                        AnimatedVisibility(
-                            visible = bannerMessage != null,
-                            enter = fadeIn(),
-                            exit = fadeOut()
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(Color(0xFF102436))
-                                    .border(1.dp, CyberCyan, RoundedCornerShape(14.dp))
-                                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    // 2. Live Notification Toast Banner (only when active)
+                    if (bannerMessage != null) {
+                        item {
+                            AnimatedVisibility(
+                                visible = bannerMessage != null,
+                                enter = fadeIn(),
+                                exit = fadeOut()
                             ) {
-                                Text(
-                                    text = bannerMessage.orEmpty(),
-                                    fontFamily = ShareTechMonoFontFamily,
-                                    fontSize = 12.sp,
-                                    color = CyberCyan
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0xFF102436))
+                                        .border(1.dp, CyberCyan, RoundedCornerShape(14.dp))
+                                        .padding(horizontal = 14.dp, vertical = 9.dp)
+                                ) {
+                                    Text(
+                                        text = bannerMessage.orEmpty(),
+                                        fontFamily = ShareTechMonoFontFamily,
+                                        fontSize = 11.sp,
+                                        color = CyberCyan
+                                    )
+                                }
                             }
                         }
                     }
 
-                    // 4. Interactive Real-Time 120Hz AMOLED Canvas Preview (Supports Drag & Drop, Tap-to-Open App, Marquee)
-                    item {
-                        InteractiveAmoledPreviewCard(
-                            config = config,
-                            weather = weather,
-                            telemetry = telemetry,
-                            mediaState = mediaState,
-                            timerState = timerState,
-                            messageState = messageState,
-                            callState = callState,
-                            recentNotifications = recentNotifications,
-                            hasRecentPushEvent = hasRecentPushEvent,
-                            onToggleIslandExpand = viewModel::toggleIslandExpanded,
-                            onPrimaryTapIsland = viewModel::handleIslandPrimaryTap,
-                            onLongPressIsland = viewModel::handleIslandLongPress,
-                            onOpenParentApp = viewModel::openActiveIslandParentApp,
-                            onRestoreDismissedIsland = viewModel::restoreDismissedIsland,
-                            onToggleFlashlight = viewModel::toggleFlashlightFromIsland,
-                            onSwitchIslandActivity = { act ->
-                                viewModel.setActiveIslandActivity(act, expandImmediately = true)
-                            },
-                            onDragIslandByDeltaDp = viewModel::onDragIslandByDeltaDp,
-                            onResetIslandPosition = viewModel::resetIslandPositionToCamera,
-                            onPlayPauseMedia = viewModel::toggleMediaPlayPause,
-                            onNextTrack = viewModel::skipToNextTrack,
-                            onToggleTimer = viewModel::toggleTimerRunning,
-                            onAddOneMinTimer = viewModel::addOneMinuteToTimer,
-                            onResetTimer = viewModel::resetIslandTimer,
-                            onSendQuickReply = viewModel::sendQuickReply,
-                            onAcceptOrEndCall = viewModel::acceptOrEndIslandCall,
-                            onLaunchFullScreenAod = { viewModel.setFullScreenAodActive(true) }
-                        )
+                    // 3. Interactive Real-Time 120Hz AMOLED Canvas Preview (Shown ONLY on Studio & Island tabs, with 1-tap Collapse)
+                    if (currentTab == 0 || currentTab == 1) {
+                        item {
+                            InteractiveAmoledPreviewCard(
+                                config = config,
+                                weather = weather,
+                                telemetry = telemetry,
+                                mediaState = mediaState,
+                                timerState = timerState,
+                                messageState = messageState,
+                                callState = callState,
+                                recentNotifications = recentNotifications,
+                                hasRecentPushEvent = hasRecentPushEvent,
+                                onToggleIslandExpand = viewModel::toggleIslandExpanded,
+                                onPrimaryTapIsland = viewModel::handleIslandPrimaryTap,
+                                onLongPressIsland = viewModel::handleIslandLongPress,
+                                onOpenParentApp = viewModel::openActiveIslandParentApp,
+                                onRestoreDismissedIsland = viewModel::restoreDismissedIsland,
+                                onToggleFlashlight = viewModel::toggleFlashlightFromIsland,
+                                onSwitchIslandActivity = { act ->
+                                    viewModel.setActiveIslandActivity(act, expandImmediately = true)
+                                },
+                                onDragIslandByDeltaDp = viewModel::onDragIslandByDeltaDp,
+                                onResetIslandPosition = viewModel::resetIslandPositionToCamera,
+                                onPlayPauseMedia = viewModel::toggleMediaPlayPause,
+                                onNextTrack = viewModel::skipToNextTrack,
+                                onToggleTimer = viewModel::toggleTimerRunning,
+                                onAddOneMinTimer = viewModel::addOneMinuteToTimer,
+                                onResetTimer = viewModel::resetIslandTimer,
+                                onSendQuickReply = viewModel::sendQuickReply,
+                                onAcceptOrEndCall = viewModel::acceptOrEndIslandCall,
+                                onLaunchFullScreenAod = { viewModel.setFullScreenAodActive(true) },
+                                onTogglePreviewCollapse = viewModel::togglePreviewCollapsed,
+                                onTogglePomodoro = viewModel::togglePomodoroTimer,
+                                onToggleStandBy = { viewModel.toggleStandByNightMode(!config.standByNightModeEnabled) },
+                                onOpenIceQrModal = { viewModel.setIceQrModalVisible(true) },
+                                onDismissIceQrModal = { viewModel.setIceQrModalVisible(false) }
+                            )
+                        }
                     }
 
-                    // 5. Active Tab Content
+                    // 4. Active Tab Content
                     item {
                         when (currentTab) {
                             0 -> StudioCustomizationSection(
@@ -415,7 +392,21 @@ fun LuminaAodAppRoot(
                                 onSimulateTiltPreview = viewModel::setSimulatedTiltPreview,
                                 onApplyPreset = viewModel::applyPreset,
                                 onSavePreset = viewModel::saveCurrentAsPreset,
-                                onDeletePreset = viewModel::deletePreset
+                                onDeletePreset = viewModel::deletePreset,
+                                onToggleQuickDock = viewModel::toggleQuickDock,
+                                onToggleShowPinnedMemo = viewModel::toggleShowPinnedMemo,
+                                onUpdatePinnedMemoText = viewModel::updatePinnedMemoText,
+                                onTogglePomodoroTimer = viewModel::togglePomodoroTimer,
+                                onResetPomodoroTimer = viewModel::resetPomodoroTimer,
+                                onToggleStandByMode = viewModel::toggleStandByNightMode,
+                                onToggleStandByAutoOnCharging = viewModel::toggleStandByAutoOnCharging,
+                                onToggleStandByRedTint = viewModel::toggleStandByRedTintOnly,
+                                onToggleIceCardEnabled = viewModel::toggleIceCardEnabled,
+                                onUpdateIceDetails = viewModel::updateIceCardDetails,
+                                onShowIceQrOnAod = { viewModel.setIceQrModalVisible(true) },
+                                onApplySmartProfile = viewModel::applySmartProfile,
+                                onExportConfigJson = viewModel::exportConfigurationJson,
+                                onImportConfigJson = viewModel::importConfigurationJson
                             )
 
                             1 -> IslandAndRingSection(
@@ -486,7 +477,9 @@ fun LuminaAodAppRoot(
                                 onSelectWidgetStyle = viewModel::setWeatherWidgetStyle,
                                 onToggleShowWeatherOnAod = viewModel::toggleShowWeatherOnAod,
                                 onRefreshWeather = viewModel::refreshWeatherForSelectedCity,
-                                onPushWeatherToIslandTicker = viewModel::pushLiveWeatherToIslandTicker
+                                onPushWeatherToIslandTicker = viewModel::pushLiveWeatherToIslandTicker,
+                                onToggleBarometerCompass = viewModel::toggleBarometerAndCompass,
+                                onRotateCompassTest = viewModel::rotateSimulatedCompass
                             )
 
                             4 -> BatteryAndDeepSleepSection(
@@ -560,6 +553,10 @@ fun LuminaAodAppRoot(
                 onAcceptOrEndCall = viewModel::acceptOrEndIslandCall,
                 onTogglePocketModeTest = viewModel::togglePocketSimulation,
                 onManualPixelShiftStep = viewModel::triggerManualPixelShiftStep,
+                onTogglePomodoro = viewModel::togglePomodoroTimer,
+                onToggleStandBy = { viewModel.toggleStandByNightMode(!config.standByNightModeEnabled) },
+                onOpenIceQrModal = { viewModel.setIceQrModalVisible(true) },
+                onDismissIceQrModal = { viewModel.setIceQrModalVisible(false) },
                 onExitFullScreen = { viewModel.setFullScreenAodActive(false) }
             )
         }
@@ -567,118 +564,25 @@ fun LuminaAodAppRoot(
 }
 
 @Composable
-private fun PermissionsAndQuickEventStrip(
+private fun LuminaUnifiedTopHeaderCard(
+    isAodEnabled: Boolean,
+    isDeepSleep: Boolean,
+    oprPercent: Float,
     permissionStatus: SystemPermissionStatus,
+    onToggleAod: (Boolean) -> Unit,
+    onToggleDeepSleep: () -> Unit,
+    onLaunchFullScreenAod: () -> Unit,
     onOpenNotificationListener: () -> Unit,
     onOpenOverlayPermission: () -> Unit,
     onGoToSystemTab: () -> Unit,
     onTriggerLiveEventTest: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(ObsidianCard)
-            .border(
-                1.dp,
-                if (permissionStatus.allCriticalGranted) EnergyEmerald.copy(alpha = 0.45f)
-                else SolarAmber.copy(alpha = 0.65f),
-                RoundedCornerShape(16.dp)
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .clickable { onGoToSystemTab() },
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = if (permissionStatus.allCriticalGranted) Icons.Default.CheckCircle else Icons.Default.VerifiedUser,
-                contentDescription = null,
-                tint = if (permissionStatus.allCriticalGranted) EnergyEmerald else SolarAmber,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
-                Text(
-                    text = if (permissionStatus.allCriticalGranted) {
-                        "Все критические разрешения выданы (${permissionStatus.grantedCount}/4)"
-                    } else {
-                        "Разрешения: ${permissionStatus.grantedCount}/4 • Нажмите для настройки"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 11.sp,
-                    color = PureWhite
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = if (permissionStatus.hasNotificationListenerAccess) "✓ Пуши: ВКЛ" else "⚠ Доступ к пушам",
-                        fontFamily = ShareTechMonoFontFamily,
-                        fontSize = 10.sp,
-                        color = if (permissionStatus.hasNotificationListenerAccess) EnergyEmerald else SolarAmber,
-                        modifier = Modifier.clickable { onOpenNotificationListener() }
-                    )
-                    Text(
-                        text = if (permissionStatus.hasOverlayPermission) "✓ Оверлей: ВКЛ" else "⚠ Оверлей окон",
-                        fontFamily = ShareTechMonoFontFamily,
-                        fontSize = 10.sp,
-                        color = if (permissionStatus.hasOverlayPermission) EnergyEmerald else SolarAmber,
-                        modifier = Modifier.clickable { onOpenOverlayPermission() }
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Surface(
-            onClick = onTriggerLiveEventTest,
-            shape = RoundedCornerShape(50),
-            color = CyberCyan.copy(alpha = 0.2f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan),
-            modifier = Modifier.testTag("quick_test_event_pulse_button")
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.NotificationsActive,
-                    contentDescription = "Тест события",
-                    tint = CyberCyan,
-                    modifier = Modifier.size(13.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "Тест Пуша",
-                    fontFamily = ShareTechMonoFontFamily,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CyberCyan
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LuminaStudioHeaderCard(
-    isAodEnabled: Boolean,
-    isDeepSleep: Boolean,
-    oprPercent: Float,
-    onToggleAod: (Boolean) -> Unit,
-    onToggleDeepSleep: () -> Unit
-) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(ObsidianCard)
-            .border(1.dp, ObsidianBorder, RoundedCornerShape(22.dp))
+            .border(1.dp, ObsidianBorder, RoundedCornerShape(20.dp))
     ) {
         Image(
             painter = painterResource(id = R.drawable.ic_amoled_banner),
@@ -686,88 +590,188 @@ private fun LuminaStudioHeaderCard(
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(92.dp)
+                .height(106.dp)
         )
 
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "LUMINA AOD",
-                        fontFamily = OrbitronFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        color = PureWhite
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(EnergyEmerald.copy(alpha = 0.2f))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
+            // Top Row: Title + OPR badge + Deep Sleep + Master Switch
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "v3.0 • 120HZ",
-                            fontFamily = ShareTechMonoFontFamily,
-                            fontSize = 10.sp,
-                            color = EnergyEmerald
+                            text = "LUMINA AOD",
+                            fontFamily = OrbitronFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = PureWhite
                         )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(EnergyEmerald.copy(alpha = 0.2f))
+                                .padding(horizontal = 7.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "OPR $oprPercent%",
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontSize = 9.sp,
+                                color = EnergyEmerald
+                            )
+                        }
                     }
+                    Text(
+                        text = "11 Форм Острова • StandBy • Погода Мира • ICE QR",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 10.sp,
+                        color = MutedSlate
+                    )
                 }
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "11 Форм Острова • Бегущая Строка • Погода Мира • OPR $oprPercent%",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontSize = 11.sp,
-                    color = MutedSlate
-                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Surface(
+                        onClick = onToggleDeepSleep,
+                        shape = CircleShape,
+                        color = if (isDeepSleep) SolarAmber else Color(0xFF172133),
+                        modifier = Modifier.testTag("header_deep_sleep_button")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bedtime,
+                                contentDescription = "Глубокий сон",
+                                tint = if (isDeepSleep) PitchBlack else SolarAmber,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "Сон",
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontSize = 10.sp,
+                                color = if (isDeepSleep) PitchBlack else PureWhite
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = isAodEnabled,
+                        onCheckedChange = onToggleAod,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = PitchBlack,
+                            checkedTrackColor = CyberCyan
+                        ),
+                        modifier = Modifier.testTag("master_aod_switch")
+                    )
+                }
             }
 
+            // Bottom Compact Strip: Permissions Status + Test Push + Fullscreen AOD Button
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    onClick = onToggleDeepSleep,
-                    shape = CircleShape,
-                    color = if (isDeepSleep) SolarAmber else Color(0xFF172133),
-                    modifier = Modifier.testTag("header_deep_sleep_button")
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onGoToSystemTab() },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Bedtime,
-                            contentDescription = "Глубокий сон",
-                            tint = if (isDeepSleep) PitchBlack else SolarAmber,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Сон",
-                            fontFamily = ShareTechMonoFontFamily,
-                            fontSize = 11.sp,
-                            color = if (isDeepSleep) PitchBlack else PureWhite
-                        )
-                    }
+                    Icon(
+                        imageVector = if (permissionStatus.allCriticalGranted) Icons.Default.CheckCircle else Icons.Default.VerifiedUser,
+                        contentDescription = null,
+                        tint = if (permissionStatus.allCriticalGranted) EnergyEmerald else SolarAmber,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = if (permissionStatus.hasNotificationListenerAccess) "✓ Пуши" else "⚠ Пуши",
+                        fontFamily = ShareTechMonoFontFamily,
+                        fontSize = 10.sp,
+                        color = if (permissionStatus.hasNotificationListenerAccess) EnergyEmerald else SolarAmber,
+                        modifier = Modifier.clickable { onOpenNotificationListener() }
+                    )
+                    Text(
+                        text = if (permissionStatus.hasOverlayPermission) "✓ Оверлей" else "⚠ Оверлей",
+                        fontFamily = ShareTechMonoFontFamily,
+                        fontSize = 10.sp,
+                        color = if (permissionStatus.hasOverlayPermission) EnergyEmerald else SolarAmber,
+                        modifier = Modifier.clickable { onOpenOverlayPermission() }
+                    )
                 }
 
-                Switch(
-                    checked = isAodEnabled,
-                    onCheckedChange = onToggleAod,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = PitchBlack,
-                        checkedTrackColor = CyberCyan
-                    ),
-                    modifier = Modifier.testTag("master_aod_switch")
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Surface(
+                        onClick = onTriggerLiveEventTest,
+                        shape = RoundedCornerShape(50),
+                        color = CyberCyan.copy(alpha = 0.16f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan.copy(alpha = 0.7f)),
+                        modifier = Modifier.testTag("quick_test_event_pulse_button")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = "Тест события",
+                                tint = CyberCyan,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "Тест Пуша",
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CyberCyan
+                            )
+                        }
+                    }
+
+                    Surface(
+                        onClick = onLaunchFullScreenAod,
+                        shape = RoundedCornerShape(50),
+                        color = CyberCyan,
+                        modifier = Modifier.testTag("fab_launch_live_aod")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = stringResource(R.string.launch_live_aod),
+                                tint = PitchBlack,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Живой AOD",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                color = PitchBlack
+                            )
+                        }
+                    }
+                }
             }
         }
     }

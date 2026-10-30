@@ -27,16 +27,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.BatteryStd
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -468,6 +477,20 @@ fun AodClockAndWidgetsContent(
             .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        if (config.standByNightModeEnabled) {
+            StandByNightstandClockView(
+                config = config,
+                hourStr = hourStr,
+                minStr = minStr,
+                secStr = secStr,
+                dateLineRu = dateLineRu,
+                batteryPercent = batteryPercent,
+                isCharging = isCharging,
+                weather = weather
+            )
+            return@Column
+        }
+
         // Selected Clock Face Renderer (2026 Fluid Edition)
         ClockFaceShowcase(
             style = config.clockStyle,
@@ -481,7 +504,7 @@ fun AodClockAndWidgetsContent(
         )
 
         if (config.showDateAndBattery) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
@@ -512,7 +535,7 @@ fun AodClockAndWidgetsContent(
 
         // Integrated AOD Weather Widget
         if (config.showWeatherOnAod) {
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             AodWeatherWidgetView(
                 style = config.weatherWidgetStyle,
                 weather = weather,
@@ -521,12 +544,34 @@ fun AodClockAndWidgetsContent(
             )
         }
 
+        // GPS Compass & Barometric Storm Trend Pill
+        if (config.showBarometerAndCompassOnAod) {
+            Spacer(modifier = Modifier.height(6.dp))
+            AodBarometerAndCompassPill(
+                azimuthDeg = config.compassAzimuthDeg,
+                pressureMmHg = weather.pressureMmHg,
+                deltaMmHg = config.barometricDeltaMmHg,
+                accentColor = config.palette.primaryColor
+            )
+        }
+
+        // Pinned Memo & Pomodoro Focus Pill on AOD
+        if ((config.showPinnedMemoOnAod && config.pinnedMemoText.isNotBlank()) || config.pomodoroActive) {
+            Spacer(modifier = Modifier.height(6.dp))
+            AodPinnedMemoAndPomodoroPill(
+                memoText = if (config.showPinnedMemoOnAod) config.pinnedMemoText else "",
+                pomodoroActive = config.pomodoroActive,
+                pomodoroRemainingSec = config.pomodoroRemainingSec,
+                accentColor = config.palette.secondaryColor
+            )
+        }
+
         // Allowed Notification Icons Row on AOD (excludes blocked items)
         val allowedNotifications = remember(recentNotifications) {
             recentNotifications.filter { !it.wasBlockedByFilter }
         }
         if (config.showNotificationBadges && allowedNotifications.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1130,6 +1175,471 @@ fun BurnInCheckerboardOverlay(
                     center = Offset(c * step, r * step)
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun StandByNightstandClockView(
+    config: AodConfigurationState,
+    hourStr: String,
+    minStr: String,
+    secStr: String,
+    dateLineRu: String,
+    batteryPercent: Int,
+    isCharging: Boolean,
+    weather: WeatherSnapshot
+) {
+    val nightTint = if (config.standByRedTintOnly) Color(0xFFFF2A1F) else SolarAmber
+    val secondaryNight = if (config.standByRedTintOnly) Color(0xFFAA1912) else Color(0xFFFF7A00)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color(0xFF050202))
+            .border(1.dp, nightTint.copy(alpha = 0.38f), RoundedCornerShape(24.dp))
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Bedtime,
+                    contentDescription = null,
+                    tint = nightTint,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = if (config.standByRedTintOnly) "STANDBY // MONO RED" else "STANDBY // NIGHT DOCK",
+                    fontFamily = ShareTechMonoFontFamily,
+                    fontSize = 10.sp,
+                    color = nightTint.copy(alpha = 0.85f)
+                )
+            }
+            Text(
+                text = "${if (isCharging) "⚡ " else ""}$batteryPercent% • ${weather.temperatureC}°C",
+                fontFamily = ShareTechMonoFontFamily,
+                fontSize = 11.sp,
+                color = nightTint
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "$hourStr:$minStr",
+                fontFamily = OrbitronFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = (48 * config.clockScale).sp,
+                color = nightTint,
+                letterSpacing = 3.sp
+            )
+            if (config.showSeconds) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = secStr,
+                    fontFamily = ShareTechMonoFontFamily,
+                    fontSize = 18.sp,
+                    color = secondaryNight,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+        }
+
+        Text(
+            text = "$dateLineRu • ${weather.cityName} (${weather.pressureMmHg} мм)",
+            fontFamily = ShareTechMonoFontFamily,
+            fontSize = 11.sp,
+            color = nightTint.copy(alpha = 0.72f)
+        )
+
+        if (config.showPinnedMemoOnAod && config.pinnedMemoText.isNotBlank()) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "📌 ${config.pinnedMemoText}",
+                fontFamily = ShareTechMonoFontFamily,
+                fontSize = 10.sp,
+                color = nightTint.copy(alpha = 0.85f),
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+fun AodBarometerAndCompassPill(
+    azimuthDeg: Int,
+    pressureMmHg: Int,
+    deltaMmHg: Float,
+    accentColor: Color
+) {
+    val directionRu = when (((azimuthDeg % 360) + 360) % 360) {
+        in 23..67 -> "СВ"
+        in 68..112 -> "В"
+        in 113..157 -> "ЮВ"
+        in 158..202 -> "Ю"
+        in 203..247 -> "ЮЗ"
+        in 248..292 -> "З"
+        in 293..337 -> "СЗ"
+        else -> "С"
+    }
+    val trendSymbol = when {
+        deltaMmHg <= -1.2f -> "↓ Шторм/Осадки"
+        deltaMmHg >= 1.2f -> "↑ Ясно/Рост"
+        else -> "→ Стабильно"
+    }
+    val trendColor = when {
+        deltaMmHg <= -1.2f -> SolarAmber
+        deltaMmHg >= 1.2f -> EnergyEmerald
+        else -> accentColor
+    }
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xFF0A0F18))
+            .border(1.dp, trendColor.copy(alpha = 0.4f), RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Default.Explore,
+                contentDescription = "Компас",
+                tint = accentColor,
+                modifier = Modifier.size(12.dp)
+            )
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = "$directionRu ${azimuthDeg}°",
+                fontFamily = ShareTechMonoFontFamily,
+                fontSize = 10.sp,
+                color = PureWhite
+            )
+        }
+        Text(
+            text = "•",
+            fontSize = 10.sp,
+            color = MutedSlate
+        )
+        Text(
+            text = "${pressureMmHg}мм ($trendSymbol)",
+            fontFamily = ShareTechMonoFontFamily,
+            fontSize = 10.sp,
+            color = trendColor
+        )
+    }
+}
+
+@Composable
+fun AodPinnedMemoAndPomodoroPill(
+    memoText: String,
+    pomodoroActive: Boolean,
+    pomodoroRemainingSec: Int,
+    accentColor: Color
+) {
+    val pomMin = pomodoroRemainingSec / 60
+    val pomSec = pomodoroRemainingSec % 60
+    val pomFormatted = String.format("%02d:%02d", pomMin, pomSec)
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xFF0E1422))
+            .border(1.dp, accentColor.copy(alpha = 0.55f), RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (pomodoroActive) {
+            Icon(
+                imageVector = Icons.Default.Timer,
+                contentDescription = "Pomodoro",
+                tint = SolarAmber,
+                modifier = Modifier.size(12.dp)
+            )
+            Text(
+                text = "ФОКУС $pomFormatted",
+                fontFamily = ShareTechMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+                color = SolarAmber
+            )
+        }
+        if (memoText.isNotBlank()) {
+            Icon(
+                imageVector = Icons.Default.PushPin,
+                contentDescription = "Заметка",
+                tint = accentColor,
+                modifier = Modifier.size(11.dp)
+            )
+            Text(
+                text = memoText.take(36),
+                fontFamily = ShareTechMonoFontFamily,
+                fontSize = 10.sp,
+                color = PureWhite,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+fun AodQuickLaunchDockBar(
+    isFlashlightOn: Boolean,
+    isPomodoroActive: Boolean,
+    isStandByActive: Boolean,
+    isIceCardEnabled: Boolean,
+    accentColor: Color,
+    onToggleFlashlight: () -> Unit,
+    onTogglePomodoro: () -> Unit,
+    onToggleStandBy: () -> Unit,
+    onOpenIceQrCard: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xD90B101B))
+            .border(1.dp, accentColor.copy(alpha = 0.38f), RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        QuickDockIconButton(
+            icon = Icons.Default.FlashlightOn,
+            label = "Свет",
+            active = isFlashlightOn,
+            activeColor = SolarAmber,
+            onClick = onToggleFlashlight,
+            testTag = "dock_action_flashlight"
+        )
+        QuickDockIconButton(
+            icon = Icons.Default.Timer,
+            label = "Фокус",
+            active = isPomodoroActive,
+            activeColor = EnergyEmerald,
+            onClick = onTogglePomodoro,
+            testTag = "dock_action_pomodoro"
+        )
+        QuickDockIconButton(
+            icon = Icons.Default.Bedtime,
+            label = "StandBy",
+            active = isStandByActive,
+            activeColor = Color(0xFFFF453A),
+            onClick = onToggleStandBy,
+            testTag = "dock_action_standby"
+        )
+        if (isIceCardEnabled) {
+            QuickDockIconButton(
+                icon = Icons.Default.QrCode2,
+                label = "ICE QR",
+                active = false,
+                activeColor = CyberCyan,
+                onClick = onOpenIceQrCard,
+                testTag = "dock_action_ice_qr"
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickDockIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    active: Boolean,
+    activeColor: Color,
+    onClick: () -> Unit,
+    testTag: String
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color = if (active) activeColor.copy(alpha = 0.22f) else Color(0xFF131B2B),
+        modifier = Modifier.
+            border(
+                width = 1.dp,
+                color = if (active) activeColor else Color(0xFF233047),
+                shape = RoundedCornerShape(50)
+            )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (active) activeColor else PureWhite,
+                modifier = Modifier.size(13.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = label,
+                fontFamily = ShareTechMonoFontFamily,
+                fontSize = 10.sp,
+                color = if (active) activeColor else PureWhite
+            )
+        }
+    }
+}
+
+@Composable
+fun IceEmergencyQrCardOverlay(
+    ownerName: String,
+    emergencyPhone: String,
+    noteText: String,
+    accentColor: Color,
+    onDismiss: () -> Unit
+) {
+    val qrPayload = remember(ownerName, emergencyPhone, noteText) {
+        "ICE:$ownerName|TEL:$emergencyPhone|$noteText"
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(PitchBlack.copy(alpha = 0.92f))
+            .clickable { onDismiss() }
+            .padding(20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xFF0C121E))
+                .border(1.5.dp, accentColor, RoundedCornerShape(24.dp))
+                .clickable(enabled = false) { }
+                .padding(18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.QrCode2,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "ICE // КАРТОЧКА ВЛАДЕЛЬЦА",
+                        fontFamily = ShareTechMonoFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = accentColor
+                    )
+                }
+                Surface(
+                    onClick = onDismiss,
+                    shape = CircleShape,
+                    color = Color(0xFF182235)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Закрыть",
+                        tint = PureWhite,
+                        modifier = Modifier
+                            .padding(6.dp)
+                            .size(16.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Vector QR Code Matrix Renderer (21x21 Standard Version 1 Matrix)
+            Box(
+                modifier = Modifier
+                    .size(136.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(PureWhite)
+                    .padding(10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val gridSize = 21
+                    val cellPx = size.width / gridSize
+
+                    fun isFinderPattern(r: Int, c: Int, topR: Int, leftC: Int): Boolean {
+                        val dr = r - topR
+                        val dc = c - leftC
+                        if (dr !in 0..6 || dc !in 0..6) return false
+                        if (dr == 0 || dr == 6 || dc == 0 || dc == 6) return true
+                        if (dr in 2..4 && dc in 2..4) return true
+                        return false
+                    }
+
+                    for (r in 0 until gridSize) {
+                        for (c in 0 until gridSize) {
+                            val inTopLeft = r in 0..7 && c in 0..7
+                            val inTopRight = r in 0..7 && c in (gridSize - 8) until gridSize
+                            val inBottomLeft = r in (gridSize - 8) until gridSize && c in 0..7
+
+                            val isBlack = when {
+                                inTopLeft -> isFinderPattern(r, c, 0, 0)
+                                inTopRight -> isFinderPattern(r, c, 0, gridSize - 7)
+                                inBottomLeft -> isFinderPattern(r, c, gridSize - 7, 0)
+                                r == 6 -> c % 2 == 0
+                                c == 6 -> r % 2 == 0
+                                else -> {
+                                    val idx = (r * gridSize + c)
+                                    val ch = qrPayload[idx % qrPayload.length].code
+                                    ((ch xor (r * 31 + c * 17)) and 1) == 1
+                                }
+                            }
+                            if (isBlack) {
+                                drawRect(
+                                    color = PitchBlack,
+                                    topLeft = Offset(c * cellPx, r * cellPx),
+                                    size = Size(cellPx * 1.02f, cellPx * 1.02f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = ownerName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = PureWhite
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = emergencyPhone,
+                fontFamily = ShareTechMonoFontFamily,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = EnergyEmerald
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = noteText,
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 11.sp,
+                color = MutedSlate,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

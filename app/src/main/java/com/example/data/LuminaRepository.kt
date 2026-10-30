@@ -12,9 +12,11 @@ import com.example.model.IslandShapeStyle
 import com.example.model.IslandTapAction
 import com.example.model.IslandVisibilityMode
 import com.example.model.PredefinedWeatherCities
+import com.example.model.SmartProfilePreset
 import com.example.model.WeatherCityOption
 import com.example.model.WeatherWidgetStyle
 import kotlinx.coroutines.flow.Flow
+import org.json.JSONObject
 
 class LuminaRepository(
     private val dao: LuminaDao,
@@ -76,6 +78,7 @@ class LuminaRepository(
 
         return AodConfigurationState(
             isAodEnabled = sp.getBoolean("isAodEnabled", true),
+            isPreviewCollapsed = sp.getBoolean("isPreviewCollapsed", false),
             clockStyle = ClockFaceStyle.fromId(sp.getString("clockStyle", ClockFaceStyle.CYBER_PULSE.id) ?: ""),
             edgeStyle = EdgeLightingStyle.fromId(sp.getString("edgeStyle", EdgeLightingStyle.NEON_WAVE.id) ?: ""),
             palette = AodColorPalette.fromId(sp.getString("palette", AodColorPalette.CYBER_CYAN_MAGENTA.id) ?: ""),
@@ -128,6 +131,22 @@ class LuminaRepository(
             islandQuickTorchEnabled = sp.getBoolean("islandQuickTorchEnabled", true),
             weatherWidgetStyle = WeatherWidgetStyle.fromId(sp.getString("weatherWidgetStyle", WeatherWidgetStyle.COMPACT_PILL.id) ?: ""),
             selectedCity = city,
+            showBarometerAndCompassOnAod = sp.getBoolean("showBarometerAndCompassOnAod", true),
+            compassAzimuthDeg = sp.getInt("compassAzimuthDeg", 48),
+            barometricDeltaMmHg = sp.getFloat("barometricDeltaMmHg", -1.6f),
+            isQuickDockEnabled = sp.getBoolean("isQuickDockEnabled", true),
+            showPinnedMemoOnAod = sp.getBoolean("showPinnedMemoOnAod", true),
+            pinnedMemoText = sp.getString("pinnedMemoText", "Фокус: релиз v3.0 • Встреча в 16:00") ?: "",
+            pomodoroActive = sp.getBoolean("pomodoroActive", false),
+            pomodoroRemainingSec = sp.getInt("pomodoroRemainingSec", 1500),
+            standByNightModeEnabled = sp.getBoolean("standByNightModeEnabled", false),
+            standByAutoOnCharging = sp.getBoolean("standByAutoOnCharging", true),
+            standByRedTintOnly = sp.getBoolean("standByRedTintOnly", false),
+            iceCardEnabled = sp.getBoolean("iceCardEnabled", true),
+            iceOwnerName = sp.getString("iceOwnerName", "Алексей • Владелец") ?: "Алексей • Владелец",
+            iceEmergencyPhone = sp.getString("iceEmergencyPhone", "+7 (999) 412-88-04") ?: "+7 (999) 412-88-04",
+            iceMedicalOrNote = sp.getString("iceMedicalOrNote", "При обнаружении телефона, пожалуйста, свяжитесь по номеру выше или отсканируйте QR") ?: "",
+            activeSmartProfile = SmartProfilePreset.fromId(sp.getString("activeSmartProfile", SmartProfilePreset.WORK_FOCUS.id) ?: ""),
             proximityPocketMode = sp.getBoolean("proximityPocketMode", true),
             pixelShiftEnabled = sp.getBoolean("pixelShiftEnabled", true),
             burnInCheckerboard = sp.getBoolean("burnInCheckerboard", true),
@@ -146,6 +165,7 @@ class LuminaRepository(
         val sp = prefs ?: return
         sp.edit()
             .putBoolean("isAodEnabled", config.isAodEnabled)
+            .putBoolean("isPreviewCollapsed", config.isPreviewCollapsed)
             .putString("clockStyle", config.clockStyle.id)
             .putString("edgeStyle", config.edgeStyle.id)
             .putString("palette", config.palette.id)
@@ -203,6 +223,22 @@ class LuminaRepository(
             .putString("selectedCityCountry", config.selectedCity.countryRu)
             .putString("selectedCityAdmin", config.selectedCity.admin1Ru)
             .putInt("selectedCityElev", config.selectedCity.elevationM)
+            .putBoolean("showBarometerAndCompassOnAod", config.showBarometerAndCompassOnAod)
+            .putInt("compassAzimuthDeg", config.compassAzimuthDeg)
+            .putFloat("barometricDeltaMmHg", config.barometricDeltaMmHg)
+            .putBoolean("isQuickDockEnabled", config.isQuickDockEnabled)
+            .putBoolean("showPinnedMemoOnAod", config.showPinnedMemoOnAod)
+            .putString("pinnedMemoText", config.pinnedMemoText)
+            .putBoolean("pomodoroActive", config.pomodoroActive)
+            .putInt("pomodoroRemainingSec", config.pomodoroRemainingSec)
+            .putBoolean("standByNightModeEnabled", config.standByNightModeEnabled)
+            .putBoolean("standByAutoOnCharging", config.standByAutoOnCharging)
+            .putBoolean("standByRedTintOnly", config.standByRedTintOnly)
+            .putBoolean("iceCardEnabled", config.iceCardEnabled)
+            .putString("iceOwnerName", config.iceOwnerName)
+            .putString("iceEmergencyPhone", config.iceEmergencyPhone)
+            .putString("iceMedicalOrNote", config.iceMedicalOrNote)
+            .putString("activeSmartProfile", config.activeSmartProfile.id)
             .putBoolean("proximityPocketMode", config.proximityPocketMode)
             .putBoolean("pixelShiftEnabled", config.pixelShiftEnabled)
             .putBoolean("burnInCheckerboard", config.burnInCheckerboard)
@@ -215,6 +251,60 @@ class LuminaRepository(
             .putBoolean("liftToWake", config.liftToWake)
             .putBoolean("persistentShadeNotification", config.persistentShadeNotification)
             .apply()
+    }
+
+    fun exportConfigToJson(config: AodConfigurationState): String {
+        val obj = JSONObject()
+        obj.put("version", "3.0")
+        obj.put("clockStyle", config.clockStyle.id)
+        obj.put("edgeStyle", config.edgeStyle.id)
+        obj.put("palette", config.palette.id)
+        obj.put("clockScale", config.clockScale.toDouble())
+        obj.put("aodBrightness", config.aodBrightness.toDouble())
+        obj.put("islandShape", config.islandShape.id)
+        obj.put("islandVisibilityMode", config.islandVisibilityMode.id)
+        obj.put("islandTapAction", config.islandTapAction.id)
+        obj.put("islandOffsetXDp", config.islandOffsetXDp.toDouble())
+        obj.put("islandOffsetYDp", config.islandOffsetYDp.toDouble())
+        obj.put("islandMarqueeEnabled", config.islandMarqueeEnabled)
+        obj.put("weatherWidgetStyle", config.weatherWidgetStyle.id)
+        obj.put("isQuickDockEnabled", config.isQuickDockEnabled)
+        obj.put("showPinnedMemoOnAod", config.showPinnedMemoOnAod)
+        obj.put("pinnedMemoText", config.pinnedMemoText)
+        obj.put("standByNightModeEnabled", config.standByNightModeEnabled)
+        obj.put("standByRedTintOnly", config.standByRedTintOnly)
+        obj.put("iceCardEnabled", config.iceCardEnabled)
+        obj.put("showBarometerAndCompassOnAod", config.showBarometerAndCompassOnAod)
+        obj.put("activeSmartProfile", config.activeSmartProfile.id)
+        return obj.toString()
+    }
+
+    fun importConfigFromJson(rawJson: String, current: AodConfigurationState): AodConfigurationState? {
+        return runCatching {
+            val obj = JSONObject(rawJson.trim())
+            current.copy(
+                clockStyle = ClockFaceStyle.fromId(obj.optString("clockStyle", current.clockStyle.id)),
+                edgeStyle = EdgeLightingStyle.fromId(obj.optString("edgeStyle", current.edgeStyle.id)),
+                palette = AodColorPalette.fromId(obj.optString("palette", current.palette.id)),
+                clockScale = obj.optDouble("clockScale", current.clockScale.toDouble()).toFloat().coerceIn(0.75f, 1.35f),
+                aodBrightness = obj.optDouble("aodBrightness", current.aodBrightness.toDouble()).toFloat().coerceIn(0.25f, 1.0f),
+                islandShape = IslandShapeStyle.fromId(obj.optString("islandShape", current.islandShape.id)),
+                islandVisibilityMode = IslandVisibilityMode.fromId(obj.optString("islandVisibilityMode", current.islandVisibilityMode.id)),
+                islandTapAction = IslandTapAction.fromId(obj.optString("islandTapAction", current.islandTapAction.id)),
+                islandOffsetXDp = obj.optDouble("islandOffsetXDp", current.islandOffsetXDp.toDouble()).toFloat().coerceIn(-135f, 135f),
+                islandOffsetYDp = obj.optDouble("islandOffsetYDp", current.islandOffsetYDp.toDouble()).toFloat().coerceIn(2f, 260f),
+                islandMarqueeEnabled = obj.optBoolean("islandMarqueeEnabled", current.islandMarqueeEnabled),
+                weatherWidgetStyle = WeatherWidgetStyle.fromId(obj.optString("weatherWidgetStyle", current.weatherWidgetStyle.id)),
+                isQuickDockEnabled = obj.optBoolean("isQuickDockEnabled", current.isQuickDockEnabled),
+                showPinnedMemoOnAod = obj.optBoolean("showPinnedMemoOnAod", current.showPinnedMemoOnAod),
+                pinnedMemoText = obj.optString("pinnedMemoText", current.pinnedMemoText),
+                standByNightModeEnabled = obj.optBoolean("standByNightModeEnabled", current.standByNightModeEnabled),
+                standByRedTintOnly = obj.optBoolean("standByRedTintOnly", current.standByRedTintOnly),
+                iceCardEnabled = obj.optBoolean("iceCardEnabled", current.iceCardEnabled),
+                showBarometerAndCompassOnAod = obj.optBoolean("showBarometerAndCompassOnAod", current.showBarometerAndCompassOnAod),
+                activeSmartProfile = SmartProfilePreset.fromId(obj.optString("activeSmartProfile", current.activeSmartProfile.id))
+            )
+        }.getOrNull()
     }
 
     suspend fun getAllAppRulesOnce(): List<AppColorRuleEntity> {

@@ -56,6 +56,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -123,10 +127,52 @@ fun IslandAndRingSection(
     onTriggerSimulatedNotification: (AppColorRuleEntity) -> Unit,
     onClearNotifications: () -> Unit
 ) {
+    var activeIslandSubTab by rememberSaveable { mutableIntStateOf(0) }
+    val islandSubTabs = listOf(
+        "Формы (11)",
+        "Жесты & Пуши",
+        "Строка & Хаб",
+        "Позиция & Кольцо"
+    )
+
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // Segmented Sub-Tab Selector Bar for Island & Camera Ring
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(ObsidianCard)
+                .border(1.dp, ObsidianBorder, RoundedCornerShape(16.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            islandSubTabs.forEachIndexed { idx, title ->
+                val selected = activeIslandSubTab == idx
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (selected) CyberCyan else Color.Transparent)
+                        .clickable { activeIslandSubTab = idx }
+                        .padding(vertical = 9.dp)
+                        .testTag("island_subtab_$idx"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = title,
+                        fontSize = 11.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selected) PitchBlack else PureWhite,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
         // 1. Dynamic Island Master Card + Quick Activity Mode Switcher
         SectionHeaderRow(
             icon = Icons.Default.DynamicFeed,
@@ -256,6 +302,7 @@ fun IslandAndRingSection(
             }
         }
 
+        if (activeIslandSubTab == 1) {
         // 2. Visibility Mode ("Появляться только при уведомлениях") & Tap Gestures ("Открытие родителя по тапу")
         SectionHeaderRow(
             icon = Icons.Default.Visibility,
@@ -391,7 +438,9 @@ fun IslandAndRingSection(
                 }
             }
         }
+        }
 
+        if (activeIslandSubTab == 2) {
         // 3. Marquee Ticker ("Бегущая строка 120Hz") & Built-in Mini Functions
         SectionHeaderRow(
             icon = Icons.Default.Subtitles,
@@ -650,7 +699,9 @@ fun IslandAndRingSection(
                 }
             }
         }
+        }
 
+        if (activeIslandSubTab == 0) {
         // 4. 11 Geometric Shapes Selector
         SectionHeaderRow(
             icon = Icons.Default.AutoAwesome,
@@ -724,7 +775,9 @@ fun IslandAndRingSection(
                 }
             }
         }
+        }
 
+        if (activeIslandSubTab == 3) {
         // 5. Free Drag-and-Drop, Anchor Presets & 0.5dp Precision X/Y Calibration
         SectionHeaderRow(
             icon = Icons.Default.OpenWith,
@@ -1122,7 +1175,9 @@ fun IslandAndRingSection(
                 )
             }
         }
+        }
 
+        if (activeIslandSubTab == 1) {
         // 8. Quick Notification Trigger & Live Log
         SectionHeaderRow(
             icon = Icons.Default.NotificationsActive,
@@ -1221,6 +1276,7 @@ fun IslandAndRingSection(
                     }
                 }
             }
+        }
         }
     }
 }
