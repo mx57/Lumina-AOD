@@ -8,6 +8,9 @@ import com.example.model.CameraRingMode
 import com.example.model.ClockFaceStyle
 import com.example.model.EdgeLightingStyle
 import com.example.model.IslandAnchorPreset
+import com.example.model.IslandBubbleExpandMode
+import com.example.model.IslandEdgeSnapMode
+import com.example.model.IslandEntranceAnimation
 import com.example.model.IslandShapeStyle
 import com.example.model.IslandTapAction
 import com.example.model.IslandVisibilityMode
@@ -88,6 +91,36 @@ class LuminaRepository(
             showDateAndBattery = sp.getBoolean("showDateAndBattery", true),
             showWeatherOnAod = sp.getBoolean("showWeatherOnAod", true),
             showNotificationBadges = sp.getBoolean("showNotificationBadges", true),
+            showClockOnAod = sp.getBoolean("showClockOnAod", true),
+            showClockGlowDivider = sp.getBoolean("showClockGlowDivider", true),
+            showDateOnAod = sp.getBoolean("showDateOnAod", true),
+            showBatteryIconOnAod = sp.getBoolean("showBatteryIconOnAod", true),
+            showBatteryPercentOnAod = sp.getBoolean("showBatteryPercentOnAod", true),
+            showCompassInPill = sp.getBoolean("showCompassInPill", true),
+            showBarometerInPill = sp.getBoolean("showBarometerInPill", true),
+            showPomodoroOnAod = sp.getBoolean("showPomodoroOnAod", true),
+            showCameraCutoutHole = sp.getBoolean("showCameraCutoutHole", true),
+            showDockTorchBtn = sp.getBoolean("showDockTorchBtn", true),
+            showDockPomodoroBtn = sp.getBoolean("showDockPomodoroBtn", true),
+            showDockStandByBtn = sp.getBoolean("showDockStandByBtn", true),
+            showDockIceBtn = sp.getBoolean("showDockIceBtn", true),
+            showIslandLeadingIcon = sp.getBoolean("showIslandLeadingIcon", true),
+            showIslandDragGrip = sp.getBoolean("showIslandDragGrip", true),
+            showIslandUnreadBadge = sp.getBoolean("showIslandUnreadBadge", true),
+            showIslandExpandArrow = sp.getBoolean("showIslandExpandArrow", true),
+            showIslandOpenAppBtn = sp.getBoolean("showIslandOpenAppBtn", true),
+            showIslandModeTabsInExpanded = sp.getBoolean("showIslandModeTabsInExpanded", true),
+            showIslandQuickReplies = sp.getBoolean("showIslandQuickReplies", true),
+            showIslandCloseBtn = sp.getBoolean("showIslandCloseBtn", true),
+            showPreviewStatusBottomBar = sp.getBoolean("showPreviewStatusBottomBar", true),
+            showPreviewCollapsePill = sp.getBoolean("showPreviewCollapsePill", true),
+            showLiveAodControlDock = sp.getBoolean("showLiveAodControlDock", true),
+            clockOpacity = sp.getFloat("clockOpacity", 1.0f),
+            weatherWidgetScale = sp.getFloat("weatherWidgetScale", 1.0f),
+            weatherWidgetOpacity = sp.getFloat("weatherWidgetOpacity", 1.0f),
+            widgetsVerticalSpacingDp = sp.getFloat("widgetsVerticalSpacingDp", 7f),
+            dockScale = sp.getFloat("dockScale", 1.0f),
+            dockOpacity = sp.getFloat("dockOpacity", 0.95f),
             parallax3dEnabled = sp.getBoolean("parallax3dEnabled", true),
             parallaxIntensity = sp.getFloat("parallaxIntensity", 0.75f),
             liquidMetaballMorphEnabled = sp.getBoolean("liquidMetaballMorphEnabled", true),
@@ -106,6 +139,12 @@ class LuminaRepository(
             cameraRingRadiusDp = sp.getFloat("cameraRingRadiusDp", 15f),
             cameraRingThicknessDp = sp.getFloat("cameraRingThicknessDp", 3.2f),
             islandShape = IslandShapeStyle.fromId(sp.getString("islandShape", IslandShapeStyle.SPLIT_DROP.id) ?: ""),
+            isBubbleModeEnabled = sp.getBoolean("isBubbleModeEnabled", false),
+            bubbleSizeDp = sp.getFloat("bubbleSizeDp", 46f),
+            bubbleExpandMode = IslandBubbleExpandMode.fromId(sp.getString("bubbleExpandMode", IslandBubbleExpandMode.HYBRID_SWITCHABLE.id) ?: ""),
+            islandEdgeSnapMode = IslandEdgeSnapMode.fromId(sp.getString("islandEdgeSnapMode", IslandEdgeSnapMode.LEFT_RIGHT_EDGE_PEEK.id) ?: ""),
+            islandEdgePeekEnabled = sp.getBoolean("islandEdgePeekEnabled", true),
+            islandEntranceAnimation = IslandEntranceAnimation.fromId(sp.getString("islandEntranceAnimation", IslandEntranceAnimation.ELASTIC_POP_BURST.id) ?: ""),
             islandVisibilityMode = IslandVisibilityMode.fromId(sp.getString("islandVisibilityMode", IslandVisibilityMode.ALWAYS_VISIBLE.id) ?: ""),
             islandTapAction = IslandTapAction.fromId(sp.getString("islandTapAction", IslandTapAction.EXPAND_THEN_OPEN_APP.id) ?: ""),
             islandAnchor = IslandAnchorPreset.fromId(sp.getString("islandAnchor", IslandAnchorPreset.TOP_CENTER.id) ?: ""),
@@ -136,7 +175,7 @@ class LuminaRepository(
             barometricDeltaMmHg = sp.getFloat("barometricDeltaMmHg", -1.6f),
             isQuickDockEnabled = sp.getBoolean("isQuickDockEnabled", true),
             showPinnedMemoOnAod = sp.getBoolean("showPinnedMemoOnAod", true),
-            pinnedMemoText = sp.getString("pinnedMemoText", "Фокус: релиз v3.0 • Встреча в 16:00") ?: "",
+            pinnedMemoText = sp.getString("pinnedMemoText", "Фокус: релиз v4.0 • Встреча в 16:00") ?: "",
             pomodoroActive = sp.getBoolean("pomodoroActive", false),
             pomodoroRemainingSec = sp.getInt("pomodoroRemainingSec", 1500),
             standByNightModeEnabled = sp.getBoolean("standByNightModeEnabled", false),
@@ -175,6 +214,36 @@ class LuminaRepository(
             .putBoolean("showDateAndBattery", config.showDateAndBattery)
             .putBoolean("showWeatherOnAod", config.showWeatherOnAod)
             .putBoolean("showNotificationBadges", config.showNotificationBadges)
+            .putBoolean("showClockOnAod", config.showClockOnAod)
+            .putBoolean("showClockGlowDivider", config.showClockGlowDivider)
+            .putBoolean("showDateOnAod", config.showDateOnAod)
+            .putBoolean("showBatteryIconOnAod", config.showBatteryIconOnAod)
+            .putBoolean("showBatteryPercentOnAod", config.showBatteryPercentOnAod)
+            .putBoolean("showCompassInPill", config.showCompassInPill)
+            .putBoolean("showBarometerInPill", config.showBarometerInPill)
+            .putBoolean("showPomodoroOnAod", config.showPomodoroOnAod)
+            .putBoolean("showCameraCutoutHole", config.showCameraCutoutHole)
+            .putBoolean("showDockTorchBtn", config.showDockTorchBtn)
+            .putBoolean("showDockPomodoroBtn", config.showDockPomodoroBtn)
+            .putBoolean("showDockStandByBtn", config.showDockStandByBtn)
+            .putBoolean("showDockIceBtn", config.showDockIceBtn)
+            .putBoolean("showIslandLeadingIcon", config.showIslandLeadingIcon)
+            .putBoolean("showIslandDragGrip", config.showIslandDragGrip)
+            .putBoolean("showIslandUnreadBadge", config.showIslandUnreadBadge)
+            .putBoolean("showIslandExpandArrow", config.showIslandExpandArrow)
+            .putBoolean("showIslandOpenAppBtn", config.showIslandOpenAppBtn)
+            .putBoolean("showIslandModeTabsInExpanded", config.showIslandModeTabsInExpanded)
+            .putBoolean("showIslandQuickReplies", config.showIslandQuickReplies)
+            .putBoolean("showIslandCloseBtn", config.showIslandCloseBtn)
+            .putBoolean("showPreviewStatusBottomBar", config.showPreviewStatusBottomBar)
+            .putBoolean("showPreviewCollapsePill", config.showPreviewCollapsePill)
+            .putBoolean("showLiveAodControlDock", config.showLiveAodControlDock)
+            .putFloat("clockOpacity", config.clockOpacity)
+            .putFloat("weatherWidgetScale", config.weatherWidgetScale)
+            .putFloat("weatherWidgetOpacity", config.weatherWidgetOpacity)
+            .putFloat("widgetsVerticalSpacingDp", config.widgetsVerticalSpacingDp)
+            .putFloat("dockScale", config.dockScale)
+            .putFloat("dockOpacity", config.dockOpacity)
             .putBoolean("parallax3dEnabled", config.parallax3dEnabled)
             .putFloat("parallaxIntensity", config.parallaxIntensity)
             .putBoolean("liquidMetaballMorphEnabled", config.liquidMetaballMorphEnabled)
@@ -193,6 +262,12 @@ class LuminaRepository(
             .putFloat("cameraRingRadiusDp", config.cameraRingRadiusDp)
             .putFloat("cameraRingThicknessDp", config.cameraRingThicknessDp)
             .putString("islandShape", config.islandShape.id)
+            .putBoolean("isBubbleModeEnabled", config.isBubbleModeEnabled)
+            .putFloat("bubbleSizeDp", config.bubbleSizeDp)
+            .putString("bubbleExpandMode", config.bubbleExpandMode.id)
+            .putString("islandEdgeSnapMode", config.islandEdgeSnapMode.id)
+            .putBoolean("islandEdgePeekEnabled", config.islandEdgePeekEnabled)
+            .putString("islandEntranceAnimation", config.islandEntranceAnimation.id)
             .putString("islandVisibilityMode", config.islandVisibilityMode.id)
             .putString("islandTapAction", config.islandTapAction.id)
             .putString("islandAnchor", config.islandAnchor.id)
@@ -255,13 +330,19 @@ class LuminaRepository(
 
     fun exportConfigToJson(config: AodConfigurationState): String {
         val obj = JSONObject()
-        obj.put("version", "3.0")
+        obj.put("version", "4.0")
         obj.put("clockStyle", config.clockStyle.id)
         obj.put("edgeStyle", config.edgeStyle.id)
         obj.put("palette", config.palette.id)
         obj.put("clockScale", config.clockScale.toDouble())
         obj.put("aodBrightness", config.aodBrightness.toDouble())
         obj.put("islandShape", config.islandShape.id)
+        obj.put("isBubbleModeEnabled", config.isBubbleModeEnabled)
+        obj.put("bubbleSizeDp", config.bubbleSizeDp.toDouble())
+        obj.put("bubbleExpandMode", config.bubbleExpandMode.id)
+        obj.put("islandEdgeSnapMode", config.islandEdgeSnapMode.id)
+        obj.put("islandEdgePeekEnabled", config.islandEdgePeekEnabled)
+        obj.put("islandEntranceAnimation", config.islandEntranceAnimation.id)
         obj.put("islandVisibilityMode", config.islandVisibilityMode.id)
         obj.put("islandTapAction", config.islandTapAction.id)
         obj.put("islandOffsetXDp", config.islandOffsetXDp.toDouble())
@@ -275,6 +356,7 @@ class LuminaRepository(
         obj.put("standByRedTintOnly", config.standByRedTintOnly)
         obj.put("iceCardEnabled", config.iceCardEnabled)
         obj.put("showBarometerAndCompassOnAod", config.showBarometerAndCompassOnAod)
+        obj.put("showClockOnAod", config.showClockOnAod)
         obj.put("activeSmartProfile", config.activeSmartProfile.id)
         return obj.toString()
     }
@@ -289,10 +371,16 @@ class LuminaRepository(
                 clockScale = obj.optDouble("clockScale", current.clockScale.toDouble()).toFloat().coerceIn(0.75f, 1.35f),
                 aodBrightness = obj.optDouble("aodBrightness", current.aodBrightness.toDouble()).toFloat().coerceIn(0.25f, 1.0f),
                 islandShape = IslandShapeStyle.fromId(obj.optString("islandShape", current.islandShape.id)),
+                isBubbleModeEnabled = obj.optBoolean("isBubbleModeEnabled", current.isBubbleModeEnabled),
+                bubbleSizeDp = obj.optDouble("bubbleSizeDp", current.bubbleSizeDp.toDouble()).toFloat().coerceIn(34f, 68f),
+                bubbleExpandMode = IslandBubbleExpandMode.fromId(obj.optString("bubbleExpandMode", current.bubbleExpandMode.id)),
+                islandEdgeSnapMode = IslandEdgeSnapMode.fromId(obj.optString("islandEdgeSnapMode", current.islandEdgeSnapMode.id)),
+                islandEdgePeekEnabled = obj.optBoolean("islandEdgePeekEnabled", current.islandEdgePeekEnabled),
+                islandEntranceAnimation = IslandEntranceAnimation.fromId(obj.optString("islandEntranceAnimation", current.islandEntranceAnimation.id)),
                 islandVisibilityMode = IslandVisibilityMode.fromId(obj.optString("islandVisibilityMode", current.islandVisibilityMode.id)),
                 islandTapAction = IslandTapAction.fromId(obj.optString("islandTapAction", current.islandTapAction.id)),
-                islandOffsetXDp = obj.optDouble("islandOffsetXDp", current.islandOffsetXDp.toDouble()).toFloat().coerceIn(-135f, 135f),
-                islandOffsetYDp = obj.optDouble("islandOffsetYDp", current.islandOffsetYDp.toDouble()).toFloat().coerceIn(2f, 260f),
+                islandOffsetXDp = obj.optDouble("islandOffsetXDp", current.islandOffsetXDp.toDouble()).toFloat().coerceIn(-175f, 175f),
+                islandOffsetYDp = obj.optDouble("islandOffsetYDp", current.islandOffsetYDp.toDouble()).toFloat().coerceIn(0f, 680f),
                 islandMarqueeEnabled = obj.optBoolean("islandMarqueeEnabled", current.islandMarqueeEnabled),
                 weatherWidgetStyle = WeatherWidgetStyle.fromId(obj.optString("weatherWidgetStyle", current.weatherWidgetStyle.id)),
                 isQuickDockEnabled = obj.optBoolean("isQuickDockEnabled", current.isQuickDockEnabled),
@@ -302,6 +390,7 @@ class LuminaRepository(
                 standByRedTintOnly = obj.optBoolean("standByRedTintOnly", current.standByRedTintOnly),
                 iceCardEnabled = obj.optBoolean("iceCardEnabled", current.iceCardEnabled),
                 showBarometerAndCompassOnAod = obj.optBoolean("showBarometerAndCompassOnAod", current.showBarometerAndCompassOnAod),
+                showClockOnAod = obj.optBoolean("showClockOnAod", current.showClockOnAod),
                 activeSmartProfile = SmartProfilePreset.fromId(obj.optString("activeSmartProfile", current.activeSmartProfile.id))
             )
         }.getOrNull()

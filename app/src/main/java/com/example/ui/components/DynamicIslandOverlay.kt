@@ -2,6 +2,8 @@ package com.example.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -67,8 +69,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -92,7 +96,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AodConfigurationState
 import com.example.model.IslandActivityType
+import com.example.model.IslandBubbleExpandMode
 import com.example.model.IslandCallState
+import com.example.model.IslandEntranceAnimation
 import com.example.model.IslandMediaState
 import com.example.model.IslandMessageState
 import com.example.model.IslandShapeStyle
@@ -127,6 +133,7 @@ fun DynamicIslandOverlay(
     isCharging: Boolean,
     unreadNotificationsCount: Int,
     hasRecentPushEvent: Boolean = true,
+    entrancePulseTimestamp: Long = 0L,
     telemetry: HardwareTelemetryState = HardwareTelemetryState(),
     onToggleExpand: () -> Unit,
     onPrimaryTapIsland: () -> Unit = onToggleExpand,
@@ -143,6 +150,8 @@ fun DynamicIslandOverlay(
     onToggleFlashlight: () -> Unit = {},
     onSwitchIslandActivity: (IslandActivityType) -> Unit,
     onDragIslandByDeltaDp: (Float, Float) -> Unit = { _, _ -> },
+    onDragIslandEnd: () -> Unit = {},
+    onChangeBubbleExpandMode: (IslandBubbleExpandMode) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (!config.isDynamicIslandEnabled) return
@@ -195,31 +204,88 @@ fun DynamicIslandOverlay(
     val primaryColor = config.palette.primaryColor
     val secondaryColor = config.palette.secondaryColor
 
+    // 9 Notification Entrance Animations Progress (0f -> 1f on incoming notification or test trigger)
+    val entranceAnim = remember { Animatable(1f) }
+    LaunchedEffect(entrancePulseTimestamp, config.islandEntranceAnimation) {
+        if (entrancePulseTimestamp > 0L) {
+            entranceAnim.snapTo(0f)
+            when (config.islandEntranceAnimation) {
+                IslandEntranceAnimation.ELASTIC_POP_BURST,
+                IslandEntranceAnimation.BOUNCY_GRAVITY_FALL -> {
+                    entranceAnim.animateTo(
+                        targetValue = 1f,
+                        animationSpec = spring(
+                            dampingRatio = 0.42f,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    )
+                }
+                else -> {
+                    entranceAnim.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(
+                            durationMillis = 720,
+                            easing = FastOutSlowInEasing
+                        )
+                    )
+                }
+            }
+        }
+    }
+    val ep = entranceAnim.value
+
+    // Local toggle when Bubble Expand Mode is HYBRID_SWITCHABLE
+    var localBubbleTickerView by remember(config.bubbleExpandMode) {
+        mutableStateOf(config.bubbleExpandMode == IslandBubbleExpandMode.MARQUEE_TICKER_STRIP)
+    }
+    val isBubbleTickerExpanded = when (config.bubbleExpandMode) {
+        IslandBubbleExpandMode.FULL_MESSAGE_CARD -> false
+        IslandBubbleExpandMode.MARQUEE_TICKER_STRIP -> true
+        IslandBubbleExpandMode.HYBRID_SWITCHABLE -> localBubbleTickerView
+    }
+
+    val isBubbleMode = config.isEffectiveBubbleMode
     val damping = (0.95f - (config.islandSpringBounciness * 0.55f)).coerceIn(0.32f, 0.88f)
-    val baseCompactWidth = when (config.islandShape) {
-        IslandShapeStyle.LIQUID_SPHERE, IslandShapeStyle.STARLIGHT_ORB -> 136f
-        IslandShapeStyle.ULTRA_THREAD -> 196f
-        IslandShapeStyle.SPLIT_DROP -> 178f
-        IslandShapeStyle.MATRIX_TICKER_BAR, IslandShapeStyle.AUDIO_SPECTRUM_WAVE -> 212f
-        IslandShapeStyle.DUAL_CYBER_WINGS, IslandShapeStyle.FLOATING_NOTCH -> 194f
+    val baseCompactWidth = when {
+        isBubbleMode -> config.bubbleSizeDp.coerceIn(38f, 76f)
+        config.islandShape == IslandShapeStyle.LIQUID_SPHERE || config.islandShape == IslandShapeStyle.STARLIGHT_ORB -> 136f
+        config.islandShape == IslandShapeStyle.ULTRA_THREAD -> 196f
+        config.islandShape == IslandShapeStyle.SPLIT_DROP -> 178f
+        config.islandShape == IslandShapeStyle.MATRIX_TICKER_BAR || config.islandShape == IslandShapeStyle.AUDIO_SPECTRUM_WAVE -> 212f
+        config.islandShape == IslandShapeStyle.DUAL_CYBER_WINGS || config.islandShape == IslandShapeStyle.FLOATING_NOTCH -> 194f
         else -> 172f
     }
-    val baseCompactHeight = when (config.islandShape) {
-        IslandShapeStyle.ULTRA_THREAD -> 24f
-        IslandShapeStyle.LIQUID_SPHERE, IslandShapeStyle.STARLIGHT_ORB -> 38f
-        IslandShapeStyle.MATRIX_TICKER_BAR -> 36f
-        IslandShapeStyle.FLOATING_NOTCH -> 32f
+    val baseCompactHeight = when {
+        isBubbleMode -> config.bubbleSizeDp.coerceIn(38f, 76f)
+        config.islandShape == IslandShapeStyle.ULTRA_THREAD -> 24f
+        config.islandShape == IslandShapeStyle.LIQUID_SPHERE || config.islandShape == IslandShapeStyle.STARLIGHT_ORB -> 38f
+        config.islandShape == IslandShapeStyle.MATRIX_TICKER_BAR -> 36f
+        config.islandShape == IslandShapeStyle.FLOATING_NOTCH -> 32f
         else -> 34f
     }
 
     val targetWidthDp = if (config.isIslandExpanded) {
-        (286f * config.islandWidthScale).coerceIn(230f, 326f).dp
+        if (isBubbleMode && isBubbleTickerExpanded) {
+            (282f * config.islandWidthScale).coerceIn(220f, 320f).dp
+        } else {
+            (286f * config.islandWidthScale).coerceIn(230f, 326f).dp
+        }
+    } else if (isBubbleMode) {
+        baseCompactWidth.dp
     } else {
         (baseCompactWidth * config.islandWidthScale).coerceIn(115f, 260f).dp
     }
 
     val targetHeightDp = if (config.isIslandExpanded) {
-        (166f * config.islandHeightScale).coerceIn(138f, 220f).dp
+        if (isBubbleMode && isBubbleTickerExpanded) {
+            68.dp
+        } else if (isBubbleMode) {
+            (178f * config.islandHeightScale).coerceIn(148f, 228f).dp
+        } else {
+            (166f * config.islandHeightScale).coerceIn(138f, 220f).dp
+        }
+    } else if (isBubbleMode) {
+        baseCompactHeight.dp
     } else {
         (baseCompactHeight * config.islandHeightScale).coerceIn(22f, 54f).dp
     }
@@ -235,8 +301,30 @@ fun DynamicIslandOverlay(
         label = "island_height_2026"
     )
 
+    // Edge Peek & Expanded Edge Safe Clamping:
+    // 1. When compact bubble is near left/right edge and islandEdgePeekEnabled == true, shift half of the bubble off-screen.
+    // 2. When expanded near left/right edge, smoothly shift inward so the morphed card/marquee strip stays fully visible inside the screen!
+    val effectiveOffsetXDp = remember(
+        config.islandOffsetXDp,
+        config.isIslandExpanded,
+        isBubbleMode,
+        config.islandEdgePeekEnabled,
+        config.bubbleSizeDp
+    ) {
+        val rawX = config.islandOffsetXDp
+        if (config.isIslandExpanded) {
+            // Keep expanded card within safe horizontal bounds even when bubble was snapped to edge
+            rawX.coerceIn(-24f, 24f)
+        } else if (isBubbleMode && config.islandEdgePeekEnabled && abs(rawX) >= 115f) {
+            val peekShift = config.bubbleSizeDp * 0.42f
+            if (rawX < 0f) rawX - peekShift else rawX + peekShift
+        } else {
+            rawX
+        }
+    }
+
     val animOffsetX by animateDpAsState(
-        targetValue = config.islandOffsetXDp.dp,
+        targetValue = effectiveOffsetXDp.dp,
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium),
         label = "island_offset_x"
     )
@@ -275,16 +363,18 @@ fun DynamicIslandOverlay(
         label = "tiltRotationZ"
     )
 
-    val shapeOutline = when (config.islandShape) {
-        IslandShapeStyle.CYBER_HEXAGON, IslandShapeStyle.DUAL_CYBER_WINGS -> CutCornerShape(
+    val shapeOutline = when {
+        isBubbleMode && !config.isIslandExpanded -> CircleShape
+        isBubbleMode && config.isIslandExpanded && isBubbleTickerExpanded -> RoundedCornerShape(22.dp)
+        config.islandShape == IslandShapeStyle.CYBER_HEXAGON || config.islandShape == IslandShapeStyle.DUAL_CYBER_WINGS -> CutCornerShape(
             topStart = if (config.isIslandExpanded) 18.dp else 12.dp,
             topEnd = if (config.isIslandExpanded) 18.dp else 12.dp,
             bottomStart = if (config.isIslandExpanded) 18.dp else 12.dp,
             bottomEnd = if (config.isIslandExpanded) 18.dp else 12.dp
         )
-        IslandShapeStyle.ULTRA_THREAD -> RoundedCornerShape(50)
-        IslandShapeStyle.MATRIX_TICKER_BAR -> RoundedCornerShape(10.dp)
-        IslandShapeStyle.FLOATING_NOTCH -> RoundedCornerShape(
+        config.islandShape == IslandShapeStyle.ULTRA_THREAD -> RoundedCornerShape(50)
+        config.islandShape == IslandShapeStyle.MATRIX_TICKER_BAR -> RoundedCornerShape(10.dp)
+        config.islandShape == IslandShapeStyle.FLOATING_NOTCH -> RoundedCornerShape(
             topStart = 4.dp,
             topEnd = 4.dp,
             bottomStart = 20.dp,
@@ -343,11 +433,53 @@ fun DynamicIslandOverlay(
         parts.joinToString("   ✦   ")
     }
 
+    // Compute 9 Entrance Animation transform values
+    val entranceScaleX = when (config.islandEntranceAnimation) {
+        IslandEntranceAnimation.LIQUID_DROP_TOP -> 0.68f + 0.32f * ep
+        IslandEntranceAnimation.ELASTIC_POP_BURST -> (0.2f + 0.8f * ep).coerceAtLeast(0.1f)
+        IslandEntranceAnimation.LASER_HORIZON_SCAN -> (0.05f + 0.95f * ep)
+        IslandEntranceAnimation.BOUNCY_GRAVITY_FALL -> 1f + (1f - ep) * 0.25f * sin(ep * 3f * PI.toFloat())
+        IslandEntranceAnimation.SUPERNOVA_FLASH_PULSE -> 0.35f + 0.65f * ep
+        else -> 0.88f + 0.12f * ep
+    }
+    val entranceScaleY = when (config.islandEntranceAnimation) {
+        IslandEntranceAnimation.LIQUID_DROP_TOP -> 1.48f - 0.48f * ep
+        IslandEntranceAnimation.ELASTIC_POP_BURST -> (0.2f + 0.8f * ep).coerceAtLeast(0.1f)
+        IslandEntranceAnimation.LASER_HORIZON_SCAN -> (0.25f + 0.75f * ep)
+        IslandEntranceAnimation.BOUNCY_GRAVITY_FALL -> 1f - (1f - ep) * 0.25f * sin(ep * 3f * PI.toFloat())
+        IslandEntranceAnimation.SUPERNOVA_FLASH_PULSE -> 0.35f + 0.65f * ep
+        else -> 0.88f + 0.12f * ep
+    }
+    val entranceTranslateY = when (config.islandEntranceAnimation) {
+        IslandEntranceAnimation.LIQUID_DROP_TOP -> -(1f - ep) * 52f
+        IslandEntranceAnimation.BOUNCY_GRAVITY_FALL -> -(1f - ep) * 68f * abs(kotlin.math.cos(ep * 2.2f * PI.toFloat()))
+        else -> 0f
+    }
+    val entranceTranslateX = when (config.islandEntranceAnimation) {
+        IslandEntranceAnimation.CYBER_GLITCH_SLICE -> (1f - ep) * 26f * sin(ep * 16f * PI.toFloat())
+        else -> 0f
+    }
+    val entranceRotX = when (config.islandEntranceAnimation) {
+        IslandEntranceAnimation.HOLOGRAM_FLIP_3D -> (1f - ep) * 180f
+        else -> 0f
+    }
+    val entranceRotY = when (config.islandEntranceAnimation) {
+        IslandEntranceAnimation.HOLOGRAM_FLIP_3D -> (1f - ep) * 90f
+        else -> 0f
+    }
+
     Box(
         modifier = modifier
             .offset(x = animOffsetX, y = animOffsetY)
             .graphicsLayer {
                 rotationZ = tiltRotationZ
+                rotationX = entranceRotX
+                rotationY = entranceRotY
+                scaleX = entranceScaleX
+                scaleY = entranceScaleY
+                translationX = entranceTranslateX
+                translationY = entranceTranslateY
+                alpha = (0.25f + 0.75f * ep).coerceIn(0f, 1f)
             }
             .pointerInput(config.isIslandFreeDragEnabled) {
                 if (config.isIslandFreeDragEnabled) {
@@ -355,10 +487,12 @@ fun DynamicIslandOverlay(
                         onDragEnd = {
                             dragVelX = 0f
                             dragVelY = 0f
+                            onDragIslandEnd()
                         },
                         onDragCancel = {
                             dragVelX = 0f
                             dragVelY = 0f
+                            onDragIslandEnd()
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
@@ -483,6 +617,94 @@ fun DynamicIslandOverlay(
                 }
                 else -> Unit
             }
+
+            // 1c. Entrance Animation Special Shader Overlays (when ep < 0.99f)
+            if (ep < 0.99f) {
+                val fxFactor = (1f - ep).coerceIn(0f, 1f)
+                when (config.islandEntranceAnimation) {
+                    IslandEntranceAnimation.NEON_SHOCKWAVE_RING -> {
+                        for (ringIdx in 1..3) {
+                            val ringProgress = ((ep * 1.2f) - (ringIdx - 1) * 0.18f).coerceIn(0f, 1f)
+                            if (ringProgress > 0f) {
+                                drawRoundRect(
+                                    color = if (ringIdx % 2 == 1) primaryColor.copy(alpha = (1f - ringProgress) * 0.85f)
+                                    else secondaryColor.copy(alpha = (1f - ringProgress) * 0.85f),
+                                    topLeft = Offset(
+                                        14.dp.toPx() - ringProgress * 18.dp.toPx(),
+                                        6.dp.toPx() - ringProgress * 12.dp.toPx()
+                                    ),
+                                    size = Size(
+                                        (w - 28.dp.toPx()) + ringProgress * 36.dp.toPx(),
+                                        (h - 12.dp.toPx()) + ringProgress * 24.dp.toPx()
+                                    ),
+                                    cornerRadius = CornerRadius(36.dp.toPx(), 36.dp.toPx()),
+                                    style = Stroke(width = (3.2f * (1f - ringProgress) + 1f).dp.toPx())
+                                )
+                            }
+                        }
+                    }
+                    IslandEntranceAnimation.LASER_HORIZON_SCAN -> {
+                        val scanX = w * ep
+                        drawLine(
+                            color = PureWhite.copy(alpha = fxFactor),
+                            start = Offset(0f, h / 2f),
+                            end = Offset(w, h / 2f),
+                            strokeWidth = (4.dp.toPx() * fxFactor).coerceAtLeast(1.dp.toPx()),
+                            cap = StrokeCap.Round
+                        )
+                        drawCircle(
+                            color = primaryColor.copy(alpha = fxFactor),
+                            radius = 10.dp.toPx() * fxFactor,
+                            center = Offset(scanX, h / 2f)
+                        )
+                    }
+                    IslandEntranceAnimation.LIQUID_METABALL_SPLIT -> {
+                        val spread = (w * 0.46f) * fxFactor
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(primaryColor.copy(alpha = 0.9f * fxFactor), Color.Transparent)
+                            ),
+                            radius = (h * 0.42f),
+                            center = Offset(w / 2f - spread, h / 2f)
+                        )
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(secondaryColor.copy(alpha = 0.9f * fxFactor), Color.Transparent)
+                            ),
+                            radius = (h * 0.42f),
+                            center = Offset(w / 2f + spread, h / 2f)
+                        )
+                    }
+                    IslandEntranceAnimation.SUPERNOVA_FLASH_PULSE -> {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    PureWhite.copy(alpha = 0.95f * fxFactor),
+                                    SolarAmber.copy(alpha = 0.7f * fxFactor),
+                                    primaryColor.copy(alpha = 0.4f * fxFactor),
+                                    Color.Transparent
+                                )
+                            ),
+                            radius = (w.coerceAtLeast(h) * (0.35f + 0.65f * ep)),
+                            center = Offset(w / 2f, h / 2f)
+                        )
+                    }
+                    IslandEntranceAnimation.CYBER_GLITCH_SLICE -> {
+                        for (slice in 0..3) {
+                            val sy = (h / 4f) * slice + 4.dp.toPx()
+                            val shift = sin((ep * 20f + slice * 2f)) * 16.dp.toPx() * fxFactor
+                            drawLine(
+                                color = if (slice % 2 == 0) CyberCyan.copy(alpha = 0.85f * fxFactor)
+                                else NeonMagenta.copy(alpha = 0.85f * fxFactor),
+                                start = Offset(16.dp.toPx() + shift, sy),
+                                end = Offset(w - 16.dp.toPx() + shift, sy),
+                                strokeWidth = 2.5.dp.toPx()
+                            )
+                        }
+                    }
+                    else -> Unit
+                }
+            }
         }
 
         // 2. Main Island Body + Optional Split-Drop Satellite Droplet
@@ -539,28 +761,56 @@ fun DynamicIslandOverlay(
                 }
 
                 AnimatedContent(
-                    targetState = config.isIslandExpanded,
+                    targetState = Triple(config.isIslandExpanded, isBubbleMode, isBubbleTickerExpanded),
                     transitionSpec = {
                         (fadeIn(tween(220)) + scaleIn(initialScale = 0.92f))
                             .togetherWith(fadeOut(tween(150)) + scaleOut(targetScale = 0.92f))
                     },
                     label = "island_content_morph"
-                ) { expanded ->
+                ) { (expanded, bubbleActive, bubbleTicker) ->
                     if (!expanded) {
-                        CompactIslandPillContent(
+                        if (bubbleActive) {
+                            CompactFloatingBubbleContent(
+                                config = config,
+                                messageState = messageState,
+                                unreadCount = unreadNotificationsCount,
+                                wavePhase = wavePhase,
+                                primaryColor = primaryColor,
+                                secondaryColor = secondaryColor
+                            )
+                        } else {
+                            CompactIslandPillContent(
+                                config = config,
+                                mediaState = mediaState,
+                                timerState = timerState,
+                                messageState = messageState,
+                                callState = callState,
+                                weather = weather,
+                                batteryPercent = batteryPercent,
+                                unreadCount = unreadNotificationsCount,
+                                wavePhase = wavePhase,
+                                marqueeText = marqueeSummaryText,
+                                telemetry = telemetry,
+                                primaryColor = primaryColor,
+                                secondaryColor = secondaryColor
+                            )
+                        }
+                    } else if (bubbleActive && bubbleTicker) {
+                        BubbleExpandedMarqueeStripContent(
                             config = config,
-                            mediaState = mediaState,
-                            timerState = timerState,
                             messageState = messageState,
-                            callState = callState,
-                            weather = weather,
-                            batteryPercent = batteryPercent,
-                            unreadCount = unreadNotificationsCount,
-                            wavePhase = wavePhase,
                             marqueeText = marqueeSummaryText,
-                            telemetry = telemetry,
                             primaryColor = primaryColor,
-                            secondaryColor = secondaryColor
+                            secondaryColor = secondaryColor,
+                            onCollapse = onToggleExpand,
+                            onOpenParentApp = onOpenParentApp,
+                            onSwitchToFullCard = {
+                                if (config.bubbleExpandMode == IslandBubbleExpandMode.HYBRID_SWITCHABLE) {
+                                    localBubbleTickerView = false
+                                } else {
+                                    onChangeBubbleExpandMode(IslandBubbleExpandMode.FULL_MESSAGE_CARD)
+                                }
+                            }
                         )
                     } else {
                         ExpandedIslandCardContent(
@@ -578,6 +828,14 @@ fun DynamicIslandOverlay(
                             telemetry = telemetry,
                             primaryColor = primaryColor,
                             secondaryColor = secondaryColor,
+                            isBubbleMode = bubbleActive,
+                            onSwitchToBubbleTicker = {
+                                if (config.bubbleExpandMode == IslandBubbleExpandMode.HYBRID_SWITCHABLE) {
+                                    localBubbleTickerView = true
+                                } else {
+                                    onChangeBubbleExpandMode(IslandBubbleExpandMode.MARQUEE_TICKER_STRIP)
+                                }
+                            },
                             onCollapse = onToggleExpand,
                             onOpenParentApp = onOpenParentApp,
                             onTogglePlayPause = onTogglePlayPause,
@@ -656,6 +914,189 @@ fun DynamicIslandOverlay(
     }
 }
 
+@Composable
+private fun CompactFloatingBubbleContent(
+    config: AodConfigurationState,
+    messageState: IslandMessageState,
+    unreadCount: Int,
+    wavePhase: Float,
+    primaryColor: Color,
+    secondaryColor: Color
+) {
+    val leadingIcon = when (config.activeIslandType) {
+        IslandActivityType.MEDIA_PLAYER -> Icons.Default.MusicNote
+        IslandActivityType.MESSAGE_NOTIFICATION -> Icons.Default.ChatBubble
+        IslandActivityType.ACTIVE_TIMER -> Icons.Default.Timer
+        IslandActivityType.INCOMING_CALL -> Icons.Default.Call
+        IslandActivityType.WEATHER_ALERT -> Icons.Default.Cloud
+        IslandActivityType.BATTERY_TURBO -> Icons.Default.Bolt
+        IslandActivityType.SYSTEM_TELEMETRY -> Icons.Default.Memory
+        IslandActivityType.MARQUEE_TICKER -> Icons.Default.Subtitles
+    }
+    val bubbleTint = when (config.activeIslandType) {
+        IslandActivityType.MESSAGE_NOTIFICATION -> Color(messageState.appColorHex)
+        IslandActivityType.INCOMING_CALL, IslandActivityType.BATTERY_TURBO -> EnergyEmerald
+        IslandActivityType.WEATHER_ALERT -> SolarAmber
+        else -> primaryColor
+    }
+
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        // Animated liquid ring inside bubble
+        Canvas(modifier = Modifier.size((config.bubbleSizeDp * 0.72f).dp)) {
+            val pulseR = (size.minDimension / 2f) * (0.85f + 0.15f * sin(wavePhase))
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(bubbleTint.copy(alpha = 0.35f), Color.Transparent)
+                ),
+                radius = pulseR
+            )
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (config.showIslandLeadingIcon) {
+                Icon(
+                    imageVector = leadingIcon,
+                    contentDescription = "Остров-пузырь",
+                    tint = bubbleTint,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            if (config.showIslandUnreadBadge && unreadCount > 0) {
+                Text(
+                    text = "${unreadCount.coerceAtMost(99)}",
+                    fontFamily = ShareTechMonoFontFamily,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PureWhite
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BubbleExpandedMarqueeStripContent(
+    config: AodConfigurationState,
+    messageState: IslandMessageState,
+    marqueeText: String,
+    primaryColor: Color,
+    secondaryColor: Color,
+    onCollapse: () -> Unit,
+    onOpenParentApp: () -> Unit,
+    onSwitchToFullCard: () -> Unit
+) {
+    val fullTickerLine = remember(messageState, marqueeText) {
+        "${messageState.appName} • ${messageState.sender}: ${messageState.message}   ✦   $marqueeText"
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Subtitles,
+                    contentDescription = null,
+                    tint = primaryColor,
+                    modifier = Modifier.size(13.dp)
+                )
+                Text(
+                    text = "ПУЗЫРЬ • БЕГУЩАЯ СТРОКА",
+                    fontFamily = ShareTechMonoFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.5.sp,
+                    color = primaryColor
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(secondaryColor.copy(alpha = 0.2f))
+                        .border(0.8.dp, secondaryColor, RoundedCornerShape(50))
+                        .clickable { onSwitchToFullCard() }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .testTag("bubble_switch_to_full_text_btn")
+                ) {
+                    Text(
+                        text = "Полный текст",
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = secondaryColor
+                    )
+                }
+
+                if (config.showIslandOpenAppBtn) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(primaryColor.copy(alpha = 0.2f))
+                            .clickable { onOpenParentApp() }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "В приложение",
+                            fontSize = 8.5.sp,
+                            color = primaryColor
+                        )
+                    }
+                }
+
+                if (config.showIslandCloseBtn) {
+                    Icon(
+                        imageVector = Icons.Default.CloseFullscreen,
+                        contentDescription = "Свернуть в пузырь",
+                        tint = MutedSlate,
+                        modifier = Modifier
+                            .size(14.dp)
+                            .clickable { onCollapse() }
+                    )
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF0B1220))
+                .border(1.dp, primaryColor.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = fullTickerLine,
+                fontFamily = ShareTechMonoFontFamily,
+                fontSize = (config.islandMarqueeFontSizeSp + 1f).sp,
+                fontWeight = FontWeight.Bold,
+                color = PureWhite,
+                maxLines = 1,
+                modifier = Modifier.basicMarquee(
+                    iterations = Int.MAX_VALUE,
+                    velocity = (42f * config.islandMarqueeSpeed).dp
+                )
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CompactIslandPillContent(
@@ -684,7 +1125,7 @@ private fun CompactIslandPillContent(
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             modifier = Modifier.weight(1f, fill = false)
         ) {
-            if (config.isIslandFreeDragEnabled) {
+            if (config.isIslandFreeDragEnabled && config.showIslandDragGrip) {
                 Icon(
                     imageVector = Icons.Default.DragIndicator,
                     contentDescription = "Перетащить Остров",
@@ -693,29 +1134,31 @@ private fun CompactIslandPillContent(
                 )
             }
 
-            val leadingIcon = when (config.activeIslandType) {
-                IslandActivityType.MEDIA_PLAYER -> Icons.Default.MusicNote
-                IslandActivityType.MESSAGE_NOTIFICATION -> Icons.Default.ChatBubble
-                IslandActivityType.ACTIVE_TIMER -> Icons.Default.Timer
-                IslandActivityType.INCOMING_CALL -> Icons.Default.Call
-                IslandActivityType.WEATHER_ALERT -> Icons.Default.Cloud
-                IslandActivityType.BATTERY_TURBO -> Icons.Default.Bolt
-                IslandActivityType.SYSTEM_TELEMETRY -> Icons.Default.Memory
-                IslandActivityType.MARQUEE_TICKER -> Icons.Default.Subtitles
-            }
-            val leadingTint = when (config.activeIslandType) {
-                IslandActivityType.MESSAGE_NOTIFICATION -> Color(messageState.appColorHex)
-                IslandActivityType.INCOMING_CALL, IslandActivityType.BATTERY_TURBO -> EnergyEmerald
-                IslandActivityType.WEATHER_ALERT -> SolarAmber
-                else -> primaryColor
-            }
+            if (config.showIslandLeadingIcon) {
+                val leadingIcon = when (config.activeIslandType) {
+                    IslandActivityType.MEDIA_PLAYER -> Icons.Default.MusicNote
+                    IslandActivityType.MESSAGE_NOTIFICATION -> Icons.Default.ChatBubble
+                    IslandActivityType.ACTIVE_TIMER -> Icons.Default.Timer
+                    IslandActivityType.INCOMING_CALL -> Icons.Default.Call
+                    IslandActivityType.WEATHER_ALERT -> Icons.Default.Cloud
+                    IslandActivityType.BATTERY_TURBO -> Icons.Default.Bolt
+                    IslandActivityType.SYSTEM_TELEMETRY -> Icons.Default.Memory
+                    IslandActivityType.MARQUEE_TICKER -> Icons.Default.Subtitles
+                }
+                val leadingTint = when (config.activeIslandType) {
+                    IslandActivityType.MESSAGE_NOTIFICATION -> Color(messageState.appColorHex)
+                    IslandActivityType.INCOMING_CALL, IslandActivityType.BATTERY_TURBO -> EnergyEmerald
+                    IslandActivityType.WEATHER_ALERT -> SolarAmber
+                    else -> primaryColor
+                }
 
-            Icon(
-                imageVector = leadingIcon,
-                contentDescription = null,
-                tint = leadingTint,
-                modifier = Modifier.size(14.dp)
-            )
+                Icon(
+                    imageVector = leadingIcon,
+                    contentDescription = null,
+                    tint = leadingTint,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
 
             if (config.islandMarqueeEnabled ||
                 config.islandShape == IslandShapeStyle.MATRIX_TICKER_BAR ||
@@ -802,7 +1245,7 @@ private fun CompactIslandPillContent(
                 )
             }
 
-            if (unreadCount > 0 && config.islandShape != IslandShapeStyle.SPLIT_DROP) {
+            if (config.showIslandUnreadBadge && unreadCount > 0 && config.islandShape != IslandShapeStyle.SPLIT_DROP) {
                 Box(
                     modifier = Modifier
                         .size(15.dp)
@@ -817,7 +1260,7 @@ private fun CompactIslandPillContent(
                         color = PitchBlack
                     )
                 }
-            } else {
+            } else if (config.showIslandExpandArrow) {
                 Icon(
                     imageVector = Icons.Default.OpenInFull,
                     contentDescription = "Раскрыть Остров",
@@ -846,6 +1289,8 @@ private fun ExpandedIslandCardContent(
     telemetry: HardwareTelemetryState,
     primaryColor: Color,
     secondaryColor: Color,
+    isBubbleMode: Boolean = false,
+    onSwitchToBubbleTicker: () -> Unit = {},
     onCollapse: () -> Unit,
     onOpenParentApp: () -> Unit,
     onTogglePlayPause: () -> Unit,
@@ -862,54 +1307,77 @@ private fun ExpandedIslandCardContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Top Mode Switcher Strip + Quick Torch + Open Parent App + Collapse Button
+        // Top Mode Switcher Strip + Bubble Ticker Toggle + Quick Torch + Open Parent App + Collapse Button
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                IslandActivityType.entries.forEach { type ->
-                    val selected = type == activeType
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(
-                                if (selected) primaryColor.copy(alpha = 0.22f)
-                                else Color(0xFF121824)
+            if (config.showIslandModeTabsInExpanded) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IslandActivityType.entries.forEach { type ->
+                        val selected = type == activeType
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(
+                                    if (selected) primaryColor.copy(alpha = 0.22f)
+                                    else Color(0xFF121824)
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = if (selected) primaryColor else Color.Transparent,
+                                    shape = RoundedCornerShape(50)
+                                )
+                                .clickable { onSwitchIslandActivity(type) }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            val shortLabel = when (type) {
+                                IslandActivityType.MEDIA_PLAYER -> "Плеер"
+                                IslandActivityType.MESSAGE_NOTIFICATION -> "Пуш"
+                                IslandActivityType.ACTIVE_TIMER -> "Таймер"
+                                IslandActivityType.INCOMING_CALL -> "Вызов"
+                                IslandActivityType.WEATHER_ALERT -> "Погода"
+                                IslandActivityType.BATTERY_TURBO -> "Заряд"
+                                IslandActivityType.SYSTEM_TELEMETRY -> "Система"
+                                IslandActivityType.MARQUEE_TICKER -> "Строка"
+                            }
+                            Text(
+                                text = shortLabel,
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (selected) primaryColor else MutedSlate
                             )
-                            .border(
-                                width = 1.dp,
-                                color = if (selected) primaryColor else Color.Transparent,
-                                shape = RoundedCornerShape(50)
-                            )
-                            .clickable { onSwitchIslandActivity(type) }
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        val shortLabel = when (type) {
-                            IslandActivityType.MEDIA_PLAYER -> "Плеер"
-                            IslandActivityType.MESSAGE_NOTIFICATION -> "Пуш"
-                            IslandActivityType.ACTIVE_TIMER -> "Таймер"
-                            IslandActivityType.INCOMING_CALL -> "Вызов"
-                            IslandActivityType.WEATHER_ALERT -> "Погода"
-                            IslandActivityType.BATTERY_TURBO -> "Заряд"
-                            IslandActivityType.SYSTEM_TELEMETRY -> "Система"
-                            IslandActivityType.MARQUEE_TICKER -> "Строка"
                         }
-                        Text(
-                            text = shortLabel,
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (selected) primaryColor else MutedSlate
-                        )
                     }
                 }
+            } else {
+                Spacer(modifier = Modifier.width(4.dp))
             }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                if (isBubbleMode) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(secondaryColor.copy(alpha = 0.2f))
+                            .border(0.8.dp, secondaryColor, RoundedCornerShape(50))
+                            .clickable { onSwitchToBubbleTicker() }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .testTag("bubble_switch_to_ticker_btn")
+                    ) {
+                        Text(
+                            text = "⇄ Строка",
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = secondaryColor
+                        )
+                    }
+                }
+
                 if (config.islandQuickTorchEnabled) {
                     Box(
                         modifier = Modifier
@@ -929,43 +1397,46 @@ private fun ExpandedIslandCardContent(
                     }
                 }
 
-                // Direct button to open the parent application of the active event
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(primaryColor.copy(alpha = 0.2f))
-                        .border(0.8.dp, primaryColor, RoundedCornerShape(50))
-                        .clickable { onOpenParentApp() }
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                        .testTag("island_open_parent_app_button")
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                if (config.showIslandOpenAppBtn) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(primaryColor.copy(alpha = 0.2f))
+                            .border(0.8.dp, primaryColor, RoundedCornerShape(50))
+                            .clickable { onOpenParentApp() }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .testTag("island_open_parent_app_button")
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                            contentDescription = "Открыть родительское приложение",
-                            tint = primaryColor,
-                            modifier = Modifier.size(10.dp)
-                        )
-                        Text(
-                            text = "Открыть",
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = primaryColor
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = "Открыть родительское приложение",
+                                tint = primaryColor,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Text(
+                                text = "Открыть",
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = primaryColor
+                            )
+                        }
                     }
                 }
 
-                Icon(
-                    imageVector = Icons.Default.CloseFullscreen,
-                    contentDescription = "Свернуть Остров",
-                    tint = MutedSlate,
-                    modifier = Modifier
-                        .size(15.dp)
-                        .clickable { onCollapse() }
-                )
+                if (config.showIslandCloseBtn) {
+                    Icon(
+                        imageVector = Icons.Default.CloseFullscreen,
+                        contentDescription = "Свернуть Остров",
+                        tint = MutedSlate,
+                        modifier = Modifier
+                            .size(15.dp)
+                            .clickable { onCollapse() }
+                    )
+                }
             }
         }
 
@@ -1083,39 +1554,42 @@ private fun ExpandedIslandCardContent(
                         text = messageState.message,
                         style = MaterialTheme.typography.bodySmall,
                         color = PureWhite,
-                        maxLines = 1,
-                        modifier = if (config.islandMarqueeEnabled) {
+                        maxLines = if (isBubbleMode || !config.islandMarqueeEnabled) 3 else 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = if (config.islandMarqueeEnabled && !isBubbleMode) {
                             Modifier.basicMarquee(velocity = (38f * config.islandMarqueeSpeed).dp)
                         } else Modifier
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        listOf("Супер 👍", "Через 5 мин", "Смотрю").forEach { quickText ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(Color(0xFF151C28))
-                                    .border(1.dp, appAccent.copy(alpha = 0.5f), RoundedCornerShape(50))
-                                    .clickable { onSendQuickReply(quickText) }
-                                    .padding(horizontal = 7.dp, vertical = 3.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = quickText,
-                                        fontSize = 9.sp,
-                                        color = PureWhite
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.Send,
-                                        contentDescription = null,
-                                        tint = appAccent,
-                                        modifier = Modifier.size(9.dp)
-                                    )
+                    if (config.showIslandQuickReplies) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            listOf("Супер 👍", "Через 5 мин", "Смотрю").forEach { quickText ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(Color(0xFF151C28))
+                                        .border(1.dp, appAccent.copy(alpha = 0.5f), RoundedCornerShape(50))
+                                        .clickable { onSendQuickReply(quickText) }
+                                        .padding(horizontal = 7.dp, vertical = 3.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = quickText,
+                                            fontSize = 9.sp,
+                                            color = PureWhite
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.Send,
+                                            contentDescription = null,
+                                            tint = appAccent,
+                                            modifier = Modifier.size(9.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

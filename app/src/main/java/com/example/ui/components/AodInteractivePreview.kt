@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.NotificationLogEntity
 import com.example.model.AodConfigurationState
 import com.example.model.IslandActivityType
+import com.example.model.IslandBubbleExpandMode
 import com.example.model.IslandCallState
 import com.example.model.IslandMediaState
 import com.example.model.IslandMessageState
@@ -82,6 +83,7 @@ fun InteractiveAmoledPreviewCard(
     callState: IslandCallState,
     recentNotifications: List<NotificationLogEntity>,
     hasRecentPushEvent: Boolean = true,
+    entrancePulseTimestamp: Long = 0L,
     onToggleIslandExpand: () -> Unit,
     onPrimaryTapIsland: () -> Unit = onToggleIslandExpand,
     onLongPressIsland: () -> Unit = {},
@@ -90,6 +92,8 @@ fun InteractiveAmoledPreviewCard(
     onToggleFlashlight: () -> Unit = {},
     onSwitchIslandActivity: (IslandActivityType) -> Unit = {},
     onDragIslandByDeltaDp: (Float, Float) -> Unit,
+    onDragIslandEnd: () -> Unit = {},
+    onChangeBubbleExpandMode: (IslandBubbleExpandMode) -> Unit = {},
     onResetIslandPosition: () -> Unit,
     onPlayPauseMedia: () -> Unit,
     onNextTrack: () -> Unit,
@@ -296,6 +300,7 @@ fun InteractiveAmoledPreviewCard(
                             isCharging = telemetry.isCharging,
                             unreadNotificationsCount = unreadCount,
                             hasRecentPushEvent = hasRecentPushEvent,
+                            entrancePulseTimestamp = entrancePulseTimestamp,
                             telemetry = telemetry,
                             onToggleExpand = onToggleIslandExpand,
                             onPrimaryTapIsland = onPrimaryTapIsland,
@@ -311,7 +316,9 @@ fun InteractiveAmoledPreviewCard(
                             onAcceptOrEndCall = onAcceptOrEndCall,
                             onToggleFlashlight = onToggleFlashlight,
                             onSwitchIslandActivity = onSwitchIslandActivity,
-                            onDragIslandByDeltaDp = onDragIslandByDeltaDp
+                            onDragIslandByDeltaDp = onDragIslandByDeltaDp,
+                            onDragIslandEnd = onDragIslandEnd,
+                            onChangeBubbleExpandMode = onChangeBubbleExpandMode
                         )
                     }
 
@@ -320,13 +327,19 @@ fun InteractiveAmoledPreviewCard(
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = 44.dp)
+                                .padding(bottom = if (config.showPreviewStatusBottomBar) 44.dp else 14.dp)
                         ) {
                             AodQuickLaunchDockBar(
                                 isFlashlightOn = telemetry.isFlashlightOn,
                                 isPomodoroActive = config.pomodoroActive,
                                 isStandByActive = config.standByNightModeEnabled,
                                 isIceCardEnabled = config.iceCardEnabled,
+                                showTorchBtn = config.showDockTorchBtn,
+                                showPomodoroBtn = config.showDockPomodoroBtn,
+                                showStandByBtn = config.showDockStandByBtn,
+                                showIceBtn = config.showDockIceBtn,
+                                dockScale = config.dockScale,
+                                dockOpacity = config.dockOpacity,
                                 accentColor = config.palette.primaryColor,
                                 onToggleFlashlight = onToggleFlashlight,
                                 onTogglePomodoro = onTogglePomodoro,
@@ -352,122 +365,155 @@ fun InteractiveAmoledPreviewCard(
                 }
 
                 // Top-Right Collapse Preview Pill
-                Surface(
-                    onClick = onTogglePreviewCollapse,
-                    shape = RoundedCornerShape(50),
-                    color = Color(0xCC0D131F),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 10.dp, end = 12.dp)
-                        .testTag("toggle_preview_collapse_btn")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                if (config.showPreviewCollapsePill) {
+                    Surface(
+                        onClick = onTogglePreviewCollapse,
+                        shape = RoundedCornerShape(50),
+                        color = Color(0xCC0D131F),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 10.dp, end = 12.dp)
+                            .testTag("toggle_preview_collapse_btn")
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.ExpandLess,
-                            contentDescription = "Свернуть превью",
-                            tint = MutedSlate,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "Свернуть",
-                            fontFamily = ShareTechMonoFontFamily,
-                            fontSize = 9.sp,
-                            color = MutedSlate
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ExpandLess,
+                                contentDescription = "Свернуть превью",
+                                tint = MutedSlate,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "Свернуть",
+                                fontFamily = ShareTechMonoFontFamily,
+                                fontSize = 9.sp,
+                                color = MutedSlate
+                            )
+                        }
                     }
                 }
 
                 // Bottom Telemetry, Drag Indicator & Launch Fullscreen Bar
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                if (config.showPreviewStatusBottomBar) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(Color(0xCC0D131F))
-                                .border(1.dp, EnergyEmerald.copy(alpha = 0.45f), RoundedCornerShape(50))
-                                .padding(horizontal = 10.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(EnergyEmerald)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = "OPR ${config.calculateOprPercentage()}% • 120Hz",
-                                fontFamily = ShareTechMonoFontFamily,
-                                fontSize = 10.sp,
-                                color = PureWhite
-                            )
-                        }
-
-                        // Island Coordinates & Reset Quick Pill
-                        Surface(
-                            onClick = onResetIslandPosition,
-                            shape = RoundedCornerShape(50),
-                            color = Color(0xCC111927),
-                            modifier = Modifier.testTag("reset_island_pos_pill")
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color(0xCC0D131F))
+                                    .border(1.dp, EnergyEmerald.copy(alpha = 0.45f), RoundedCornerShape(50))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(EnergyEmerald)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = "OPR ${config.calculateOprPercentage()}% • 120Hz",
+                                    fontFamily = ShareTechMonoFontFamily,
+                                    fontSize = 10.sp,
+                                    color = PureWhite
+                                )
+                            }
+
+                            // Island Coordinates & Reset Quick Pill
+                            Surface(
+                                onClick = onResetIslandPosition,
+                                shape = RoundedCornerShape(50),
+                                color = Color(0xCC111927),
+                                modifier = Modifier.testTag("reset_island_pos_pill")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (config.isIslandFreeDragEnabled) Icons.Default.OpenWith else Icons.Default.CenterFocusStrong,
+                                        contentDescription = "Сбросить позицию Острова",
+                                        tint = CyberCyan,
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "${config.islandOffsetXDp.toInt()},${config.islandOffsetYDp.toInt()}dp",
+                                        fontFamily = ShareTechMonoFontFamily,
+                                        fontSize = 10.sp,
+                                        color = CyberCyan
+                                    )
+                                }
+                            }
+                        }
+
+                        Surface(
+                            onClick = onLaunchFullScreenAod,
+                            shape = RoundedCornerShape(50),
+                            color = CyberCyan,
+                            modifier = Modifier.testTag("launch_fullscreen_aod_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = if (config.isIslandFreeDragEnabled) Icons.Default.OpenWith else Icons.Default.CenterFocusStrong,
-                                    contentDescription = "Сбросить позицию Острова",
-                                    tint = CyberCyan,
-                                    modifier = Modifier.size(11.dp)
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Экран AOD",
+                                    tint = PitchBlack,
+                                    modifier = Modifier.size(13.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
-                                    text = "${config.islandOffsetXDp.toInt()},${config.islandOffsetYDp.toInt()}dp",
-                                    fontFamily = ShareTechMonoFontFamily,
-                                    fontSize = 10.sp,
-                                    color = CyberCyan
+                                    text = "Живой AOD",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PitchBlack,
+                                    fontSize = 11.sp
                                 )
                             }
                         }
                     }
-
+                } else {
                     Surface(
                         onClick = onLaunchFullScreenAod,
                         shape = RoundedCornerShape(50),
                         color = CyberCyan,
-                        modifier = Modifier.testTag("launch_fullscreen_aod_button")
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 12.dp, bottom = 8.dp)
+                            .testTag("launch_fullscreen_aod_button")
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = "Экран AOD",
                                 tint = PitchBlack,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(12.dp)
                             )
-                            Spacer(modifier = Modifier.width(5.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Живой AOD",
-                                style = MaterialTheme.typography.labelLarge,
+                                text = "AOD",
                                 fontWeight = FontWeight.Bold,
                                 color = PitchBlack,
-                                fontSize = 11.sp
+                                fontSize = 10.sp
                             )
                         }
                     }
@@ -488,6 +534,7 @@ fun FullScreenLiveAodOverlay(
     callState: IslandCallState,
     recentNotifications: List<NotificationLogEntity>,
     hasRecentPushEvent: Boolean = true,
+    entrancePulseTimestamp: Long = 0L,
     onToggleIslandExpand: () -> Unit,
     onPrimaryTapIsland: () -> Unit = onToggleIslandExpand,
     onLongPressIsland: () -> Unit = {},
@@ -496,6 +543,8 @@ fun FullScreenLiveAodOverlay(
     onToggleFlashlight: () -> Unit = {},
     onSwitchIslandActivity: (IslandActivityType) -> Unit = {},
     onDragIslandByDeltaDp: (Float, Float) -> Unit,
+    onDragIslandEnd: () -> Unit = {},
+    onChangeBubbleExpandMode: (IslandBubbleExpandMode) -> Unit = {},
     onPlayPauseMedia: () -> Unit,
     onNextTrack: () -> Unit,
     onToggleTimer: () -> Unit,
@@ -588,6 +637,7 @@ fun FullScreenLiveAodOverlay(
                     isCharging = telemetry.isCharging,
                     unreadNotificationsCount = unreadCount,
                     hasRecentPushEvent = hasRecentPushEvent,
+                    entrancePulseTimestamp = entrancePulseTimestamp,
                     telemetry = telemetry,
                     onToggleExpand = onToggleIslandExpand,
                     onPrimaryTapIsland = onPrimaryTapIsland,
@@ -603,7 +653,9 @@ fun FullScreenLiveAodOverlay(
                     onAcceptOrEndCall = onAcceptOrEndCall,
                     onToggleFlashlight = onToggleFlashlight,
                     onSwitchIslandActivity = onSwitchIslandActivity,
-                    onDragIslandByDeltaDp = onDragIslandByDeltaDp
+                    onDragIslandByDeltaDp = onDragIslandByDeltaDp,
+                    onDragIslandEnd = onDragIslandEnd,
+                    onChangeBubbleExpandMode = onChangeBubbleExpandMode
                 )
             }
 
@@ -611,13 +663,19 @@ fun FullScreenLiveAodOverlay(
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 96.dp)
+                        .padding(bottom = if (config.showLiveAodControlDock) 96.dp else 28.dp)
                 ) {
                     AodQuickLaunchDockBar(
                         isFlashlightOn = telemetry.isFlashlightOn,
                         isPomodoroActive = config.pomodoroActive,
                         isStandByActive = config.standByNightModeEnabled,
                         isIceCardEnabled = config.iceCardEnabled,
+                        showTorchBtn = config.showDockTorchBtn,
+                        showPomodoroBtn = config.showDockPomodoroBtn,
+                        showStandByBtn = config.showDockStandByBtn,
+                        showIceBtn = config.showDockIceBtn,
+                        dockScale = config.dockScale,
+                        dockOpacity = config.dockOpacity,
                         accentColor = config.palette.primaryColor,
                         onToggleFlashlight = onToggleFlashlight,
                         onTogglePomodoro = onTogglePomodoro,
@@ -641,77 +699,100 @@ fun FullScreenLiveAodOverlay(
         }
 
         // Subtle bottom control dock on Live AOD Screen
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        if (config.showLiveAodControlDock) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                OutlinedButton(
-                    onClick = onTogglePocketModeTest,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MutedSlate)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    OutlinedButton(
+                        onClick = onTogglePocketModeTest,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MutedSlate)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sensors,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (telemetry.isProximityCovered) "Убрать из кармана" else "Тест: В кармане",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 11.sp
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onManualPixelShiftStep,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MutedSlate)
+                    ) {
+                        Text(
+                            text = "Сдвиг #${telemetry.pixelShiftCycleCount}",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 11.sp
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onExitFullScreen,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberCyan),
+                        modifier = Modifier.testTag("exit_fullscreen_aod_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FullscreenExit,
+                            contentDescription = "Выход",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Выход",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.Sensors,
+                        imageVector = Icons.Default.TouchApp,
                         contentDescription = null,
-                        modifier = Modifier.size(15.dp)
+                        tint = MutedSlate.copy(alpha = 0.6f),
+                        modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (telemetry.isProximityCovered) "Убрать из кармана" else "Тест: В кармане",
+                        text = "Тап: раскрыть/приложение • Долгий тап: скрыть • Двойной тап по фону: выход",
                         fontFamily = ShareTechMonoFontFamily,
-                        fontSize = 11.sp
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = onManualPixelShiftStep,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MutedSlate)
-                ) {
-                    Text(
-                        text = "Сдвиг #${telemetry.pixelShiftCycleCount}",
-                        fontFamily = ShareTechMonoFontFamily,
-                        fontSize = 11.sp
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = onExitFullScreen,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberCyan),
-                    modifier = Modifier.testTag("exit_fullscreen_aod_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FullscreenExit,
-                        contentDescription = "Выход",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Выход",
-                        fontFamily = ShareTechMonoFontFamily,
-                        fontSize = 11.sp
+                        fontSize = 10.sp,
+                        color = MutedSlate.copy(alpha = 0.65f)
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        } else {
+            OutlinedButton(
+                onClick = onExitFullScreen,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberCyan),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+                    .testTag("exit_fullscreen_aod_button")
+            ) {
                 Icon(
-                    imageVector = Icons.Default.TouchApp,
-                    contentDescription = null,
-                    tint = MutedSlate.copy(alpha = 0.6f),
-                    modifier = Modifier.size(13.dp)
+                    imageVector = Icons.Default.FullscreenExit,
+                    contentDescription = "Выход",
+                    modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "Тап: раскрыть/приложение • Долгий тап: скрыть • Двойной тап по фону: выход",
+                    text = "Выход",
                     fontFamily = ShareTechMonoFontFamily,
-                    fontSize = 10.sp,
-                    color = MutedSlate.copy(alpha = 0.65f)
+                    fontSize = 10.sp
                 )
             }
         }

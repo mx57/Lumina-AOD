@@ -241,11 +241,132 @@ enum class IslandShapeStyle(
         id = "audio_spectrum_wave",
         titleRu = "Спектр-Волна (Audio Wave)",
         subtitleRu = "Живой эквалайзер с частотными волнами вдоль контура Острова"
+    ),
+    FLOATING_BUBBLE(
+        id = "floating_bubble",
+        titleRu = "Плавающий Пузырь (Bubble)",
+        subtitleRu = "Компактный круглый пузырь с прилипанием к краям экрана и раскрытием в текст или строку"
     );
 
     companion object {
         fun fromId(id: String): IslandShapeStyle =
             entries.find { it.id == id } ?: SPLIT_DROP
+    }
+}
+
+enum class IslandBubbleExpandMode(
+    val id: String,
+    val titleRu: String,
+    val subtitleRu: String
+) {
+    FULL_MESSAGE_CARD(
+        id = "full_message_card",
+        titleRu = "Полный текст сообщения (Карточка)",
+        subtitleRu = "После нажатия на пузырь открывается карточка с полным текстом уведомления и быстрыми ответами"
+    ),
+    MARQUEE_TICKER_STRIP(
+        id = "marquee_ticker_strip",
+        titleRu = "Бегущая строка (Marquee Ticker)",
+        subtitleRu = "После нажатия пузырь разворачивается в неоновую полосу с бегущей строкой текста"
+    ),
+    HYBRID_SWITCHABLE(
+        id = "hybrid_switchable",
+        titleRu = "Гибрид: Полный текст ⇄ Бегущая строка",
+        subtitleRu = "Позволяет в 1 касание переключать полный текст и бегущую строку прямо внутри раскрытого пузыря"
+    );
+
+    companion object {
+        fun fromId(id: String): IslandBubbleExpandMode =
+            entries.find { it.id == id } ?: FULL_MESSAGE_CARD
+    }
+}
+
+enum class IslandEdgeSnapMode(
+    val id: String,
+    val titleRu: String,
+    val subtitleRu: String
+) {
+    LEFT_RIGHT_EDGE_PEEK(
+        id = "left_right_edge_peek",
+        titleRu = "Левый и правый края + Авто-скрытие (Edge Peek)",
+        subtitleRu = "Прилипает к боковым граням экрана и прячет половину пузыря за край в покое"
+    ),
+    ALL_FOUR_EDGES_AND_CORNERS(
+        id = "all_four_edges",
+        titleRu = "Все 4 стороны и углы экрана",
+        subtitleRu = "Примагничивается к верхнему, нижнему, левому, правому краям и 4 углам экрана"
+    ),
+    CENTER_AXIS_MAGNET(
+        id = "center_axis_magnet",
+        titleRu = "Магнит центральной оси (X = 0)",
+        subtitleRu = "Мягкое примагничивание к вертикальному центру при свободном перемещении"
+    ),
+    FREE_ZERO_GRAVITY(
+        id = "free_zero_gravity",
+        titleRu = "Свободная фиксация в любой точке (Невесомость)",
+        subtitleRu = "Остается ровно в том месте экрана, где вы отпустили палец, без притягивания к краям"
+    );
+
+    companion object {
+        fun fromId(id: String): IslandEdgeSnapMode =
+            entries.find { it.id == id } ?: LEFT_RIGHT_EDGE_PEEK
+    }
+}
+
+enum class IslandEntranceAnimation(
+    val id: String,
+    val titleRu: String,
+    val subtitleRu: String
+) {
+    LIQUID_DROP_TOP(
+        id = "liquid_drop_top",
+        titleRu = "Капля с верхнего края",
+        subtitleRu = "Вязкое стекание капли сверху с вертикальным растяжением и пружинным отскоком"
+    ),
+    ELASTIC_POP_BURST(
+        id = "elastic_pop_burst",
+        titleRu = "Упругий взрыв (Elastic Pop)",
+        subtitleRu = "Мгновенный упругий импульс масштаба из точки с двойным колебанием"
+    ),
+    CYBER_GLITCH_SLICE(
+        id = "cyber_glitch_slice",
+        titleRu = "Кибер-глитч матрица",
+        subtitleRu = "Цифровой хроматический сдвиг с микро-дрожанием слоев в стиле киберпанк"
+    ),
+    LASER_HORIZON_SCAN(
+        id = "laser_horizon_scan",
+        titleRu = "Лазерная развертка",
+        subtitleRu = "Горизонтальный световой луч разворачивает контур Острова из тонкой линии"
+    ),
+    NEON_SHOCKWAVE_RING(
+        id = "neon_shockwave_ring",
+        titleRu = "Неоновая ударная волна",
+        subtitleRu = "Расходящееся кольцо плазмы вокруг Острова в момент прихода уведомления"
+    ),
+    BOUNCY_GRAVITY_FALL(
+        id = "bouncy_gravity_fall",
+        titleRu = "Гравитационный отскок (Bouncy Drop)",
+        subtitleRu = "Физическое падение сверху с затухающими прыжками на месте фиксации"
+    ),
+    LIQUID_METABALL_SPLIT(
+        id = "liquid_metaball_split",
+        titleRu = "Жидкое слияние метаболов",
+        subtitleRu = "Две встречные плазменные сферы сталкиваются и сливаются в тело Острова"
+    ),
+    HOLOGRAM_FLIP_3D(
+        id = "hologram_flip_3d",
+        titleRu = "Голографический 3D-разворот",
+        subtitleRu = "Объемный переворот карточки в пространстве на 360° по оси вращения"
+    ),
+    SUPERNOVA_FLASH_PULSE(
+        id = "supernova_flash_pulse",
+        titleRu = "Вспышка сверхновой (Supernova)",
+        subtitleRu = "Яркий радиальный звездный импульс с постепенной материализацией капсулы"
+    );
+
+    companion object {
+        fun fromId(id: String): IslandEntranceAnimation =
+            entries.find { it.id == id } ?: ELASTIC_POP_BURST
     }
 }
 
@@ -257,7 +378,7 @@ enum class IslandVisibilityMode(
     ALWAYS_VISIBLE(
         id = "always_visible",
         titleRu = "Всегда виден на экране",
-        subtitleRu = "Остров постоянно отображается в компактном или раскрытом виде"
+        subtitleRu = "Остров постоянно отображается в компактном, пузырьковом или раскрытом виде"
     ),
     ONLY_ON_EVENTS(
         id = "only_on_events",
@@ -267,7 +388,7 @@ enum class IslandVisibilityMode(
     ONLY_ON_PUSH(
         id = "only_on_push",
         titleRu = "Только при новых уведомлениях (Авто-скрытие)",
-        subtitleRu = "Появляется только при входящем уведомлении на время таймера"
+        subtitleRu = "Появляется только при входящем уведомлении с выбранной анимацией на время таймера"
     );
 
     companion object {
@@ -284,7 +405,7 @@ enum class IslandTapAction(
     EXPAND_THEN_OPEN_APP(
         id = "expand_then_open",
         titleRu = "Тап раскрывает → Повторный тап открывает приложение",
-        subtitleRu = "Первый тап раскрывает карточку, тап по раскрытому Острову запускает приложение-источник"
+        subtitleRu = "Первый тап раскрывает пузырь/карточку, повторный тап запускает приложение-источник"
     ),
     OPEN_PARENT_APP_IMMEDIATELY(
         id = "open_immediately",
@@ -294,7 +415,7 @@ enum class IslandTapAction(
     TOGGLE_EXPAND_ONLY(
         id = "toggle_expand_only",
         titleRu = "Только раскрытие/сворачивание (переход по кнопке)",
-        subtitleRu = "Тап переключает размер Острова, запуск приложения — по кнопке внутри карточки"
+        subtitleRu = "Тап переключает полный текст / бегущую строку и свернутый вид"
     );
 
     companion object {
@@ -310,12 +431,16 @@ enum class IslandAnchorPreset(
     val defaultYDp: Float
 ) {
     TOP_CENTER("top_center", "Сверху по центру", 0f, 8f),
-    TOP_LEFT("top_left", "Верхний левый угол", -64f, 10f),
-    TOP_RIGHT("top_right", "Верхний правый угол", 64f, 10f),
+    TOP_LEFT("top_left", "Верхний левый угол", -96f, 10f),
+    TOP_RIGHT("top_right", "Верхний правый угол", 96f, 10f),
+    MIDDLE_LEFT_BUBBLE("middle_left_bubble", "Левый край (Пузырь)", -142f, 118f),
+    MIDDLE_RIGHT_BUBBLE("middle_right_bubble", "Правый край (Пузырь)", 142f, 118f),
     UPPER_FLOATING("upper_floating", "Над часами (Парящий)", 0f, 44f),
     CENTER_HUD("center_hud", "По центру экрана (HUD)", 0f, 118f),
+    BOTTOM_LEFT_CORNER("bottom_left_corner", "Нижний левый угол", -118f, 232f),
+    BOTTOM_RIGHT_CORNER("bottom_right_corner", "Нижний правый угол", 118f, 232f),
     BOTTOM_DOCK("bottom_dock", "Нижний док-остров", 0f, 224f),
-    FREE_DRAG("free_drag", "Свободно (Пальцем / X-Y)", 0f, 12f);
+    FREE_DRAG("free_drag", "Свободно (В любое место)", 0f, 12f);
 
     companion object {
         fun fromId(id: String): IslandAnchorPreset =
@@ -393,7 +518,7 @@ data class IslandTimerState(
 data class IslandMessageState(
     val appName: String = "Telegram",
     val sender: String = "Алексей • Дизайн-команда",
-    val message: String = "Жидкий морфинг 120Hz, бегущая строка и переход в приложение по тапу готовы!",
+    val message: String = "Плавающий пузырь с прилипанием к краям, полным текстом сообщения, бегущей строкой и 9 анимациями готов!",
     val appColorHex: Long = 0xFF38BDF8,
     val lastReplySent: String? = null,
     val packageName: String = "org.telegram.messenger",
@@ -606,6 +731,41 @@ data class AodConfigurationState(
     val showDateAndBattery: Boolean = true,
     val showWeatherOnAod: Boolean = true,
     val showNotificationBadges: Boolean = true,
+    // Granular Individual Visibility Toggles (Every element can be turned OFF/ON)
+    val showClockOnAod: Boolean = true,
+    val showClockGlowDivider: Boolean = true,
+    val showDateOnAod: Boolean = true,
+    val showBatteryIconOnAod: Boolean = true,
+    val showBatteryPercentOnAod: Boolean = true,
+    val showCompassInPill: Boolean = true,
+    val showBarometerInPill: Boolean = true,
+    val showPomodoroOnAod: Boolean = true,
+    val showCameraCutoutHole: Boolean = true,
+    // Individual Quick Dock Button Toggles
+    val showDockTorchBtn: Boolean = true,
+    val showDockPomodoroBtn: Boolean = true,
+    val showDockStandByBtn: Boolean = true,
+    val showDockIceBtn: Boolean = true,
+    // Individual Dynamic Island Sub-Element Toggles
+    val showIslandLeadingIcon: Boolean = true,
+    val showIslandDragGrip: Boolean = true,
+    val showIslandUnreadBadge: Boolean = true,
+    val showIslandExpandArrow: Boolean = true,
+    val showIslandOpenAppBtn: Boolean = true,
+    val showIslandModeTabsInExpanded: Boolean = true,
+    val showIslandQuickReplies: Boolean = true,
+    val showIslandCloseBtn: Boolean = true,
+    // Preview & Live AOD HUD Toggles
+    val showPreviewStatusBottomBar: Boolean = true,
+    val showPreviewCollapsePill: Boolean = true,
+    val showLiveAodControlDock: Boolean = true,
+    // Per-Widget Fine Calibration (Opacity, Scale, Vertical Spacing)
+    val clockOpacity: Float = 1.0f,
+    val weatherWidgetScale: Float = 1.0f,
+    val weatherWidgetOpacity: Float = 1.0f,
+    val widgetsVerticalSpacingDp: Float = 7f,
+    val dockScale: Float = 1.0f,
+    val dockOpacity: Float = 0.95f,
     // 2026 Physics & Motion Settings
     val parallax3dEnabled: Boolean = true,
     val parallaxIntensity: Float = 0.75f,
@@ -626,8 +786,14 @@ data class AodConfigurationState(
     val cameraHoleOffsetYDp: Float = 12f,
     val cameraRingRadiusDp: Float = 15f,
     val cameraRingThicknessDp: Float = 3.2f,
-    // Dynamic Island Custom Position, Shape, Visibility, Gestures & Ticker
+    // Dynamic Island Custom Position, Shape, Visibility, Gestures, Bubble Mode & Entrance Animations
     val islandShape: IslandShapeStyle = IslandShapeStyle.SPLIT_DROP,
+    val isBubbleModeEnabled: Boolean = false,
+    val bubbleSizeDp: Float = 46f,
+    val bubbleExpandMode: IslandBubbleExpandMode = IslandBubbleExpandMode.HYBRID_SWITCHABLE,
+    val islandEdgeSnapMode: IslandEdgeSnapMode = IslandEdgeSnapMode.LEFT_RIGHT_EDGE_PEEK,
+    val islandEdgePeekEnabled: Boolean = true,
+    val islandEntranceAnimation: IslandEntranceAnimation = IslandEntranceAnimation.ELASTIC_POP_BURST,
     val islandVisibilityMode: IslandVisibilityMode = IslandVisibilityMode.ALWAYS_VISIBLE,
     val islandTapAction: IslandTapAction = IslandTapAction.EXPAND_THEN_OPEN_APP,
     val islandAnchor: IslandAnchorPreset = IslandAnchorPreset.TOP_CENTER,
@@ -664,7 +830,7 @@ data class AodConfigurationState(
     // 8 New Innovations: Quick Dock, Pinned Memo & Pomodoro, StandBy Night Mode, ICE QR Card, Smart Profiles
     val isQuickDockEnabled: Boolean = true,
     val showPinnedMemoOnAod: Boolean = true,
-    val pinnedMemoText: String = "Фокус: релиз v3.0 • Встреча в 16:00",
+    val pinnedMemoText: String = "Фокус: релиз v4.0 • Встреча в 16:00",
     val pomodoroActive: Boolean = false,
     val pomodoroRemainingSec: Int = 1500,
     val standByNightModeEnabled: Boolean = false,
@@ -689,6 +855,9 @@ data class AodConfigurationState(
     val liftToWake: Boolean = true,
     val persistentShadeNotification: Boolean = true
 ) {
+    val isEffectiveBubbleMode: Boolean
+        get() = isBubbleModeEnabled || islandShape == IslandShapeStyle.FLOATING_BUBBLE
+
     fun shouldRenderIslandNow(unreadCount: Int, hasRecentPushEvent: Boolean): Boolean {
         if (!isDynamicIslandEnabled) return false
         if (islandTemporaryDismissed && !isIslandExpanded && !hasRecentPushEvent) return false
@@ -711,21 +880,22 @@ data class AodConfigurationState(
             val baseStandBy = if (standByRedTintOnly) 0.68f else 0.88f
             return ((baseStandBy * (0.5f + aodBrightness * 0.5f) * 100f).roundToInt() / 100f).coerceIn(0.3f, 2.5f)
         }
-        var opr = clockStyle.baseOprPercent * clockScale
+        var opr = if (showClockOnAod) clockStyle.baseOprPercent * clockScale * clockOpacity else 0.05f
         opr += edgeStyle.oprAddition
         if (isCameraRingEnabled) opr += 0.18f
         if (isDynamicIslandEnabled) {
-            val shapeFactor = when (islandShape) {
-                IslandShapeStyle.ULTRA_THREAD, IslandShapeStyle.HIDDEN_OUTLINE -> 0.55f
-                IslandShapeStyle.SPLIT_DROP, IslandShapeStyle.DUAL_CYBER_WINGS -> 1.15f
-                IslandShapeStyle.MATRIX_TICKER_BAR, IslandShapeStyle.AUDIO_SPECTRUM_WAVE -> 1.2f
+            val shapeFactor = when {
+                isEffectiveBubbleMode && !isIslandExpanded -> if (islandEdgePeekEnabled && kotlin.math.abs(islandOffsetXDp) > 105f) 0.25f else 0.42f
+                islandShape == IslandShapeStyle.ULTRA_THREAD || islandShape == IslandShapeStyle.HIDDEN_OUTLINE -> 0.55f
+                islandShape == IslandShapeStyle.SPLIT_DROP || islandShape == IslandShapeStyle.DUAL_CYBER_WINGS -> 1.15f
+                islandShape == IslandShapeStyle.MATRIX_TICKER_BAR || islandShape == IslandShapeStyle.AUDIO_SPECTRUM_WAVE -> 1.2f
                 else -> 1.0f
             }
             val visFactor = if (islandVisibilityMode == IslandVisibilityMode.ALWAYS_VISIBLE) 1.0f else 0.45f
             opr += (if (isIslandExpanded) 1.45f else 0.35f) * islandWidthScale * shapeFactor * visFactor
         }
-        if (showWeatherOnAod) opr += 0.28f
-        if (isQuickDockEnabled) opr += 0.14f
+        if (showWeatherOnAod) opr += 0.28f * weatherWidgetScale * weatherWidgetOpacity
+        if (isQuickDockEnabled) opr += 0.14f * dockScale * dockOpacity
         if (burnInCheckerboard) opr *= 0.72f
         opr *= (0.5f + aodBrightness * 0.5f)
         return ((opr * 100f).roundToInt() / 100f).coerceIn(0.1f, 8.5f)
@@ -737,5 +907,35 @@ data class AodConfigurationState(
         val baseDrain = 0.22f + (opr * 0.16f)
         val sleepSaving = if (proximityPocketMode && deepSleepScheduled) 0.78f else 1.0f
         return ((baseDrain * sleepSaving * 100f).roundToInt() / 100f)
+    }
+
+    fun countEnabledVisualElements(): Int {
+        return listOf(
+            showClockOnAod,
+            showSeconds,
+            showClockGlowDivider,
+            showDateAndBattery && showDateOnAod,
+            showDateAndBattery && showBatteryIconOnAod,
+            showDateAndBattery && showBatteryPercentOnAod,
+            showWeatherOnAod,
+            showBarometerAndCompassOnAod && showCompassInPill,
+            showBarometerAndCompassOnAod && showBarometerInPill,
+            showPinnedMemoOnAod,
+            showPomodoroOnAod,
+            showNotificationBadges,
+            isDynamicIslandEnabled,
+            isCameraRingEnabled,
+            showCameraCutoutHole,
+            edgeStyle != EdgeLightingStyle.OFF,
+            isQuickDockEnabled,
+            showDockTorchBtn,
+            showDockPomodoroBtn,
+            showDockStandByBtn,
+            showDockIceBtn,
+            showIslandLeadingIcon,
+            showIslandDragGrip,
+            showIslandUnreadBadge,
+            showPreviewStatusBottomBar
+        ).count { it }
     }
 }

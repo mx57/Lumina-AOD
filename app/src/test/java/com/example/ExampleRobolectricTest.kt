@@ -10,6 +10,9 @@ import com.example.model.AodConfigurationState
 import com.example.model.AppFilterMode
 import com.example.model.ClockFaceStyle
 import com.example.model.IslandAnchorPreset
+import com.example.model.IslandBubbleExpandMode
+import com.example.model.IslandEdgeSnapMode
+import com.example.model.IslandEntranceAnimation
 import com.example.model.IslandShapeStyle
 import com.example.model.IslandTapAction
 import com.example.model.IslandVisibilityMode
@@ -29,7 +32,7 @@ import org.robolectric.annotation.Config
 class ExampleRobolectricTest {
 
     @Test
-    fun `verify app name and v3 island weather and permission models`() {
+    fun `verify app name and v4 island bubble edge snap animations and granular toggles`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val appName = context.getString(R.string.app_name)
         assertEquals("Lumina AOD", appName)
@@ -38,11 +41,14 @@ class ExampleRobolectricTest {
         val permissionStatus = LuminaPermissionHelper.checkPermissions(context)
         assertNotNull(permissionStatus)
 
-        // Verify all 11 Island shapes and 5 Smart Profiles exist
-        assertEquals(11, IslandShapeStyle.entries.size)
+        // Verify all 12 Island shapes (including FLOATING_BUBBLE), 9 entrance animations, 4 edge snap modes, 3 bubble expand modes, and 5 Smart Profiles exist
+        assertEquals(12, IslandShapeStyle.entries.size)
+        assertEquals(9, IslandEntranceAnimation.entries.size)
+        assertEquals(4, IslandEdgeSnapMode.entries.size)
+        assertEquals(3, IslandBubbleExpandMode.entries.size)
         assertEquals(5, SmartProfilePreset.entries.size)
 
-        // Verify v3.0 AodConfigurationState defaults and new innovations
+        // Verify v4.0 AodConfigurationState defaults and granular toggles
         val defaultState = AodConfigurationState()
         assertEquals(IslandShapeStyle.SPLIT_DROP, defaultState.islandShape)
         assertEquals(IslandAnchorPreset.TOP_CENTER, defaultState.islandAnchor)
@@ -56,8 +62,9 @@ class ExampleRobolectricTest {
         assertTrue(defaultState.showBarometerAndCompassOnAod)
         assertTrue(defaultState.iceCardEnabled)
         assertFalse(defaultState.isPreviewCollapsed)
+        assertEquals(25, defaultState.countEnabledVisualElements())
 
-        // Verify JSON Export & Import round-trip
+        // Verify Bubble Mode & JSON Export / Import round-trip
         val repo = LuminaRepository(
             dao = LuminaDatabase.getInstance(context).luminaDao(),
             appContext = context
@@ -66,8 +73,15 @@ class ExampleRobolectricTest {
             clockStyle = ClockFaceStyle.SYNTHWAVE_LED_GRID,
             palette = AodColorPalette.AURORA_EMERALD,
             pinnedMemoText = "Тестовая заметка",
-            standByNightModeEnabled = true
+            standByNightModeEnabled = true,
+            isBubbleModeEnabled = true,
+            bubbleSizeDp = 58f,
+            bubbleExpandMode = IslandBubbleExpandMode.MARQUEE_TICKER_STRIP,
+            islandEdgeSnapMode = IslandEdgeSnapMode.ALL_FOUR_EDGES_AND_CORNERS,
+            islandEntranceAnimation = IslandEntranceAnimation.SUPERNOVA_FLASH_PULSE,
+            showClockOnAod = false
         )
+        assertTrue(customized.isEffectiveBubbleMode)
         val json = repo.exportConfigToJson(customized)
         assertTrue(json.contains("synthwave_led_grid"))
         val imported = repo.importConfigFromJson(json, defaultState)
@@ -76,5 +90,12 @@ class ExampleRobolectricTest {
         assertEquals(AodColorPalette.AURORA_EMERALD, imported?.palette)
         assertEquals("Тестовая заметка", imported?.pinnedMemoText)
         assertEquals(true, imported?.standByNightModeEnabled)
+        assertEquals(true, imported?.isBubbleModeEnabled)
+        assertEquals(58f, imported?.bubbleSizeDp ?: 0f, 0.01f)
+        assertEquals(IslandBubbleExpandMode.MARQUEE_TICKER_STRIP, imported?.bubbleExpandMode)
+        assertEquals(IslandEdgeSnapMode.ALL_FOUR_EDGES_AND_CORNERS, imported?.islandEdgeSnapMode)
+        assertEquals(IslandEntranceAnimation.SUPERNOVA_FLASH_PULSE, imported?.islandEntranceAnimation)
+        assertEquals(false, imported?.showClockOnAod)
     }
 }
+

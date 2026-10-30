@@ -334,11 +334,13 @@ fun EdgeLightingAndCameraRingCanvas(
         val ringThickness = config.cameraRingThicknessDp.dp.toPx()
 
         // Physical camera punch-hole core
-        drawCircle(
-            color = PitchBlack,
-            radius = (ringRadius - ringThickness * 0.6f).coerceAtLeast(6f),
-            center = Offset(holeCenterX, holeCenterY)
-        )
+        if (config.showCameraCutoutHole) {
+            drawCircle(
+                color = PitchBlack,
+                radius = (ringRadius - ringThickness * 0.6f).coerceAtLeast(6f),
+                center = Offset(holeCenterX, holeCenterY)
+            )
+        }
 
         if (config.isCameraRingEnabled) {
             // Soft outer neon halo around camera ring
@@ -491,76 +493,107 @@ fun AodClockAndWidgetsContent(
             return@Column
         }
 
-        // Selected Clock Face Renderer (2026 Fluid Edition)
-        ClockFaceShowcase(
-            style = config.clockStyle,
-            palette = config.palette,
-            scale = config.clockScale,
-            hourStr = hourStr,
-            minStr = minStr,
-            secStr = secStr,
-            subSecFraction = subSecFraction,
-            showSeconds = config.showSeconds
-        )
+        val itemSpacing = config.widgetsVerticalSpacingDp.coerceIn(2f, 24f).dp
 
-        if (config.showDateAndBattery) {
-            Spacer(modifier = Modifier.height(6.dp))
+        // Selected Clock Face Renderer (2026 Fluid Edition)
+        if (config.showClockOnAod) {
+            Box(modifier = Modifier.alpha(config.clockOpacity.coerceIn(0.2f, 1.0f))) {
+                ClockFaceShowcase(
+                    style = config.clockStyle,
+                    palette = config.palette,
+                    scale = config.clockScale,
+                    hourStr = hourStr,
+                    minStr = minStr,
+                    secStr = secStr,
+                    subSecFraction = subSecFraction,
+                    showSeconds = config.showSeconds,
+                    showGlowDivider = config.showClockGlowDivider
+                )
+            }
+        }
+
+        if (config.showDateAndBattery && (config.showDateOnAod || config.showBatteryIconOnAod || config.showBatteryPercentOnAod)) {
+            Spacer(modifier = Modifier.height(itemSpacing))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Text(
-                    text = dateLineRu,
-                    fontFamily = ShareTechMonoFontFamily,
-                    fontSize = 12.sp,
-                    color = PureWhite.copy(alpha = 0.78f),
-                    letterSpacing = 1.2.sp
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Icon(
-                    imageVector = if (isCharging) Icons.Default.BatteryChargingFull else Icons.Default.BatteryStd,
-                    contentDescription = "Заряд батареи",
-                    tint = if (batteryPercent > 20) EnergyEmerald else MatrixRed,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-                Text(
-                    text = "$batteryPercent%",
-                    fontFamily = ShareTechMonoFontFamily,
-                    fontSize = 12.sp,
-                    color = if (batteryPercent > 20) EnergyEmerald else MatrixRed
-                )
+                if (config.showDateOnAod) {
+                    Text(
+                        text = dateLineRu,
+                        fontFamily = ShareTechMonoFontFamily,
+                        fontSize = 12.sp,
+                        color = PureWhite.copy(alpha = 0.78f),
+                        letterSpacing = 1.2.sp
+                    )
+                }
+                if (config.showDateOnAod && (config.showBatteryIconOnAod || config.showBatteryPercentOnAod)) {
+                    Spacer(modifier = Modifier.width(10.dp))
+                }
+                if (config.showBatteryIconOnAod) {
+                    Icon(
+                        imageVector = if (isCharging) Icons.Default.BatteryChargingFull else Icons.Default.BatteryStd,
+                        contentDescription = "Заряд батареи",
+                        tint = if (batteryPercent > 20) EnergyEmerald else MatrixRed,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    if (config.showBatteryPercentOnAod) {
+                        Spacer(modifier = Modifier.width(3.dp))
+                    }
+                }
+                if (config.showBatteryPercentOnAod) {
+                    Text(
+                        text = "$batteryPercent%",
+                        fontFamily = ShareTechMonoFontFamily,
+                        fontSize = 12.sp,
+                        color = if (batteryPercent > 20) EnergyEmerald else MatrixRed
+                    )
+                }
             }
         }
 
         // Integrated AOD Weather Widget
         if (config.showWeatherOnAod) {
-            Spacer(modifier = Modifier.height(8.dp))
-            AodWeatherWidgetView(
-                style = config.weatherWidgetStyle,
-                weather = weather,
-                primaryColor = config.palette.primaryColor,
-                secondaryColor = config.palette.secondaryColor
-            )
+            Spacer(modifier = Modifier.height(itemSpacing))
+            Box(
+                modifier = Modifier
+                    .graphicsLayer {
+                        val s = config.weatherWidgetScale.coerceIn(0.7f, 1.3f)
+                        scaleX = s
+                        scaleY = s
+                    }
+                    .alpha(config.weatherWidgetOpacity.coerceIn(0.2f, 1.0f))
+            ) {
+                AodWeatherWidgetView(
+                    style = config.weatherWidgetStyle,
+                    weather = weather,
+                    primaryColor = config.palette.primaryColor,
+                    secondaryColor = config.palette.secondaryColor
+                )
+            }
         }
 
         // GPS Compass & Barometric Storm Trend Pill
-        if (config.showBarometerAndCompassOnAod) {
-            Spacer(modifier = Modifier.height(6.dp))
+        if (config.showBarometerAndCompassOnAod && (config.showCompassInPill || config.showBarometerInPill)) {
+            Spacer(modifier = Modifier.height(itemSpacing))
             AodBarometerAndCompassPill(
                 azimuthDeg = config.compassAzimuthDeg,
                 pressureMmHg = weather.pressureMmHg,
                 deltaMmHg = config.barometricDeltaMmHg,
+                showCompass = config.showCompassInPill,
+                showBarometer = config.showBarometerInPill,
                 accentColor = config.palette.primaryColor
             )
         }
 
         // Pinned Memo & Pomodoro Focus Pill on AOD
-        if ((config.showPinnedMemoOnAod && config.pinnedMemoText.isNotBlank()) || config.pomodoroActive) {
-            Spacer(modifier = Modifier.height(6.dp))
+        val showMemoNow = config.showPinnedMemoOnAod && config.pinnedMemoText.isNotBlank()
+        val showPomodoroNow = config.showPomodoroOnAod && config.pomodoroActive
+        if (showMemoNow || showPomodoroNow) {
+            Spacer(modifier = Modifier.height(itemSpacing))
             AodPinnedMemoAndPomodoroPill(
-                memoText = if (config.showPinnedMemoOnAod) config.pinnedMemoText else "",
-                pomodoroActive = config.pomodoroActive,
+                memoText = if (showMemoNow) config.pinnedMemoText else "",
+                pomodoroActive = showPomodoroNow,
                 pomodoroRemainingSec = config.pomodoroRemainingSec,
                 accentColor = config.palette.secondaryColor
             )
@@ -571,7 +604,7 @@ fun AodClockAndWidgetsContent(
             recentNotifications.filter { !it.wasBlockedByFilter }
         }
         if (config.showNotificationBadges && allowedNotifications.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(itemSpacing))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -617,7 +650,8 @@ private fun ClockFaceShowcase(
     minStr: String,
     secStr: String,
     subSecFraction: Float,
-    showSeconds: Boolean
+    showSeconds: Boolean,
+    showGlowDivider: Boolean = true
 ) {
     val primary = palette.primaryColor
     val secondary = palette.secondaryColor
@@ -668,17 +702,19 @@ private fun ClockFaceShowcase(
                         }
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .width((132 * scale).dp)
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color.Transparent, primary, secondary, accent, Color.Transparent)
+                if (showGlowDivider) {
+                    Box(
+                        modifier = Modifier
+                            .width((132 * scale).dp)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color.Transparent, primary, secondary, accent, Color.Transparent)
+                                )
                             )
-                        )
-                )
+                    )
+                }
             }
         }
 
@@ -1281,6 +1317,8 @@ fun AodBarometerAndCompassPill(
     azimuthDeg: Int,
     pressureMmHg: Int,
     deltaMmHg: Float,
+    showCompass: Boolean = true,
+    showBarometer: Boolean = true,
     accentColor: Color
 ) {
     val directionRu = when (((azimuthDeg % 360) + 360) % 360) {
@@ -1313,32 +1351,38 @@ fun AodBarometerAndCompassPill(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Default.Explore,
-                contentDescription = "Компас",
-                tint = accentColor,
-                modifier = Modifier.size(12.dp)
-            )
-            Spacer(modifier = Modifier.width(3.dp))
+        if (showCompass) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Explore,
+                    contentDescription = "Компас",
+                    tint = accentColor,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = "$directionRu ${azimuthDeg}°",
+                    fontFamily = ShareTechMonoFontFamily,
+                    fontSize = 10.sp,
+                    color = PureWhite
+                )
+            }
+        }
+        if (showCompass && showBarometer) {
             Text(
-                text = "$directionRu ${azimuthDeg}°",
-                fontFamily = ShareTechMonoFontFamily,
+                text = "•",
                 fontSize = 10.sp,
-                color = PureWhite
+                color = MutedSlate
             )
         }
-        Text(
-            text = "•",
-            fontSize = 10.sp,
-            color = MutedSlate
-        )
-        Text(
-            text = "${pressureMmHg}мм ($trendSymbol)",
-            fontFamily = ShareTechMonoFontFamily,
-            fontSize = 10.sp,
-            color = trendColor
-        )
+        if (showBarometer) {
+            Text(
+                text = "${pressureMmHg}мм ($trendSymbol)",
+                fontFamily = ShareTechMonoFontFamily,
+                fontSize = 10.sp,
+                color = trendColor
+            )
+        }
     }
 }
 
@@ -1401,6 +1445,12 @@ fun AodQuickLaunchDockBar(
     isPomodoroActive: Boolean,
     isStandByActive: Boolean,
     isIceCardEnabled: Boolean,
+    showTorchBtn: Boolean = true,
+    showPomodoroBtn: Boolean = true,
+    showStandByBtn: Boolean = true,
+    showIceBtn: Boolean = true,
+    dockScale: Float = 1.0f,
+    dockOpacity: Float = 1.0f,
     accentColor: Color,
     onToggleFlashlight: () -> Unit,
     onTogglePomodoro: () -> Unit,
@@ -1408,8 +1458,17 @@ fun AodQuickLaunchDockBar(
     onOpenIceQrCard: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val hasAnyButton = showTorchBtn || showPomodoroBtn || showStandByBtn || (isIceCardEnabled && showIceBtn)
+    if (!hasAnyButton) return
+
     Row(
         modifier = modifier
+            .graphicsLayer {
+                val s = dockScale.coerceIn(0.75f, 1.25f)
+                scaleX = s
+                scaleY = s
+            }
+            .alpha(dockOpacity.coerceIn(0.2f, 1.0f))
             .clip(RoundedCornerShape(50))
             .background(Color(0xD90B101B))
             .border(1.dp, accentColor.copy(alpha = 0.38f), RoundedCornerShape(50))
@@ -1417,31 +1476,37 @@ fun AodQuickLaunchDockBar(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        QuickDockIconButton(
-            icon = Icons.Default.FlashlightOn,
-            label = "Свет",
-            active = isFlashlightOn,
-            activeColor = SolarAmber,
-            onClick = onToggleFlashlight,
-            testTag = "dock_action_flashlight"
-        )
-        QuickDockIconButton(
-            icon = Icons.Default.Timer,
-            label = "Фокус",
-            active = isPomodoroActive,
-            activeColor = EnergyEmerald,
-            onClick = onTogglePomodoro,
-            testTag = "dock_action_pomodoro"
-        )
-        QuickDockIconButton(
-            icon = Icons.Default.Bedtime,
-            label = "StandBy",
-            active = isStandByActive,
-            activeColor = Color(0xFFFF453A),
-            onClick = onToggleStandBy,
-            testTag = "dock_action_standby"
-        )
-        if (isIceCardEnabled) {
+        if (showTorchBtn) {
+            QuickDockIconButton(
+                icon = Icons.Default.FlashlightOn,
+                label = "Свет",
+                active = isFlashlightOn,
+                activeColor = SolarAmber,
+                onClick = onToggleFlashlight,
+                testTag = "dock_action_flashlight"
+            )
+        }
+        if (showPomodoroBtn) {
+            QuickDockIconButton(
+                icon = Icons.Default.Timer,
+                label = "Фокус",
+                active = isPomodoroActive,
+                activeColor = EnergyEmerald,
+                onClick = onTogglePomodoro,
+                testTag = "dock_action_pomodoro"
+            )
+        }
+        if (showStandByBtn) {
+            QuickDockIconButton(
+                icon = Icons.Default.Bedtime,
+                label = "StandBy",
+                active = isStandByActive,
+                activeColor = Color(0xFFFF453A),
+                onClick = onToggleStandBy,
+                testTag = "dock_action_standby"
+            )
+        }
+        if (isIceCardEnabled && showIceBtn) {
             QuickDockIconButton(
                 icon = Icons.Default.QrCode2,
                 label = "ICE QR",

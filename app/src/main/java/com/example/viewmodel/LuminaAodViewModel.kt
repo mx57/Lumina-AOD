@@ -18,7 +18,10 @@ import com.example.model.EdgeLightingStyle
 import com.example.model.InstalledAppInfo
 import com.example.model.IslandActivityType
 import com.example.model.IslandAnchorPreset
+import com.example.model.IslandBubbleExpandMode
 import com.example.model.IslandCallState
+import com.example.model.IslandEdgeSnapMode
+import com.example.model.IslandEntranceAnimation
 import com.example.model.IslandMediaState
 import com.example.model.IslandMessageState
 import com.example.model.IslandShapeStyle
@@ -480,7 +483,73 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun setIslandShape(shape: IslandShapeStyle) {
-        updateConfigAndPersist { it.copy(islandShape = shape, islandTemporaryDismissed = false) }
+        updateConfigAndPersist {
+            it.copy(
+                islandShape = shape,
+                isBubbleModeEnabled = shape == IslandShapeStyle.FLOATING_BUBBLE || it.isBubbleModeEnabled,
+                islandTemporaryDismissed = false
+            )
+        }
+    }
+
+    fun toggleBubbleMode(enabled: Boolean) {
+        updateConfigAndPersist {
+            it.copy(
+                isBubbleModeEnabled = enabled,
+                islandShape = if (enabled) IslandShapeStyle.FLOATING_BUBBLE else if (it.islandShape == IslandShapeStyle.FLOATING_BUBBLE) IslandShapeStyle.CAPSULE else it.islandShape,
+                islandTemporaryDismissed = false
+            )
+        }
+        showTemporaryBanner(
+            if (enabled) "Режим Острова-пузыря ВКЛЮЧЕН (перетаскивание и прилипание к краям)"
+            else "Стандартная форма капсулы Острова"
+        )
+    }
+
+    fun setBubbleSizeDp(sizeDp: Float) {
+        updateConfigAndPersist { it.copy(bubbleSizeDp = sizeDp.coerceIn(38f, 76f)) }
+    }
+
+    fun setBubbleExpandMode(mode: IslandBubbleExpandMode) {
+        markRecentPushWindow()
+        updateConfigAndPersist {
+            it.copy(
+                bubbleExpandMode = mode,
+                isIslandExpanded = true,
+                islandTemporaryDismissed = false
+            )
+        }
+        showTemporaryBanner("Раскрытие пузыря: ${mode.titleRu}")
+    }
+
+    fun setIslandEdgeSnapMode(mode: IslandEdgeSnapMode) {
+        updateConfigAndPersist { it.copy(islandEdgeSnapMode = mode) }
+        onDragIslandEnd()
+        showTemporaryBanner("Прилипание к краям: ${mode.titleRu}")
+    }
+
+    fun toggleIslandEdgePeek(enabled: Boolean) {
+        updateConfigAndPersist { it.copy(islandEdgePeekEnabled = enabled) }
+        showTemporaryBanner(
+            if (enabled) "Авто-скрытие половины пузыря за краем (Edge Peek) ВКЛ"
+            else "Пузырь отображается целиком у края экрана"
+        )
+    }
+
+    fun setIslandEntranceAnimation(anim: IslandEntranceAnimation) {
+        updateConfigAndPersist { it.copy(islandEntranceAnimation = anim) }
+        triggerEntranceAnimationPreview()
+    }
+
+    fun triggerEntranceAnimationPreview() {
+        _lastNotificationPulseTimestamp.value = System.currentTimeMillis()
+        markRecentPushWindow()
+        updateConfigAndPersist {
+            it.copy(
+                islandTemporaryDismissed = false
+            )
+        }
+        showTemporaryBanner("Анимация появления: ${_config.value.islandEntranceAnimation.titleRu}")
     }
 
     fun setIslandVisibilityMode(mode: IslandVisibilityMode) {
@@ -641,10 +710,13 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
     fun onDragIslandByDeltaDp(deltaXDp: Float, deltaYDp: Float) {
         if (!_config.value.isIslandFreeDragEnabled) return
         updateConfigAndPersist { current ->
-            var nextX = (current.islandOffsetXDp + deltaXDp).coerceIn(-135f, 135f)
-            val nextY = (current.islandOffsetYDp + deltaYDp).coerceIn(2f, 260f)
+            var nextX = (current.islandOffsetXDp + deltaXDp).coerceIn(-175f, 175f)
+            val nextY = (current.islandOffsetYDp + deltaYDp).coerceIn(0f, 620f)
 
-            if (current.islandMagneticSnap && abs(nextX) < 4.5f) {
+            if (current.islandEdgeSnapMode == IslandEdgeSnapMode.CENTER_AXIS_MAGNET &&
+                current.islandMagneticSnap &&
+                abs(nextX) < 5.0f
+            ) {
                 nextX = 0f
             }
             val roundedX = (nextX * 2f).roundToInt() / 2f
@@ -658,9 +730,145 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun onDragIslandEnd(maxHalfWidthDp: Float = 148f, maxHeightDp: Float = 290f) {
+        val current = _config.value
+        if (!current.isIslandFreeDragEnabled) return
+        when (current.islandEdgeSnapMode) {
+            IslandEdgeSnapMode.LEFT_RIGHT_EDGE_PEEK -> {
+                val targetX = if (current.islandOffsetXDp < 0f) -maxHalfWidthDp else maxHalfWidthDp
+                val clampedY = current.islandOffsetYDp.coerceIn(8f, maxHeightDp)
+                updateConfigAndPersist {
+                    it.copy(
+                        islandAnchor = IslandAnchorPreset.FREE_DRAG,
+                        islandOffsetXDp = targetX,
+                        islandOffsetYDp = clampedY
+                    )
+                }
+            }
+            IslandEdgeSnapMode.ALL_FOUR_EDGES_AND_CORNERS -> {
+                val x = current.islandOffsetXDp
+                val y = current.islandOffsetYDp.coerceIn(4f, maxHeightDp)
+                val distLeft = abs(x - (-maxHalfWidthDp))
+                val distRight = abs(x - maxHalfWidthDp)
+                val distTop = abs(y - 6f)
+                val distBottom = abs(y - maxHeightDp)
+
+                // Check corner proximity first
+                val cornerThreshold = 52f
+                val targetX: Float
+                val targetY: Float
+                if (distTop < cornerThreshold && distLeft < cornerThreshold) {
+                    targetX = -maxHalfWidthDp
+                    targetY = 8f
+                } else if (distTop < cornerThreshold && distRight < cornerThreshold) {
+                    targetX = maxHalfWidthDp
+                    targetY = 8f
+                } else if (distBottom < cornerThreshold && distLeft < cornerThreshold) {
+                    targetX = -maxHalfWidthDp
+                    targetY = maxHeightDp
+                } else if (distBottom < cornerThreshold && distRight < cornerThreshold) {
+                    targetX = maxHalfWidthDp
+                    targetY = maxHeightDp
+                } else {
+                    val minDist = minOf(distLeft, distRight, distTop, distBottom)
+                    when (minDist) {
+                        distLeft -> {
+                            targetX = -maxHalfWidthDp
+                            targetY = y
+                        }
+                        distRight -> {
+                            targetX = maxHalfWidthDp
+                            targetY = y
+                        }
+                        distTop -> {
+                            targetX = x.coerceIn(-maxHalfWidthDp, maxHalfWidthDp)
+                            targetY = 6f
+                        }
+                        else -> {
+                            targetX = x.coerceIn(-maxHalfWidthDp, maxHalfWidthDp)
+                            targetY = maxHeightDp
+                        }
+                    }
+                }
+                updateConfigAndPersist {
+                    it.copy(
+                        islandAnchor = IslandAnchorPreset.FREE_DRAG,
+                        islandOffsetXDp = (targetX * 2f).roundToInt() / 2f,
+                        islandOffsetYDp = (targetY * 2f).roundToInt() / 2f
+                    )
+                }
+            }
+            IslandEdgeSnapMode.CENTER_AXIS_MAGNET -> {
+                if (current.islandMagneticSnap && abs(current.islandOffsetXDp) < 16f) {
+                    updateConfigAndPersist { it.copy(islandOffsetXDp = 0f) }
+                }
+            }
+            IslandEdgeSnapMode.FREE_ZERO_GRAVITY -> {
+                // Keep exact free coordinates where user released finger
+            }
+        }
+    }
+
+    fun snapIslandToEdgeShortcut(edgeCode: String) {
+        updateConfigAndPersist { current ->
+            when (edgeCode) {
+                "LEFT_EDGE" -> current.copy(
+                    islandAnchor = IslandAnchorPreset.MIDDLE_LEFT_BUBBLE,
+                    islandOffsetXDp = -148f,
+                    islandOffsetYDp = 140f,
+                    islandTemporaryDismissed = false
+                )
+                "RIGHT_EDGE" -> current.copy(
+                    islandAnchor = IslandAnchorPreset.MIDDLE_RIGHT_BUBBLE,
+                    islandOffsetXDp = 148f,
+                    islandOffsetYDp = 140f,
+                    islandTemporaryDismissed = false
+                )
+                "TOP_EDGE" -> current.copy(
+                    islandAnchor = IslandAnchorPreset.TOP_CENTER,
+                    islandOffsetXDp = 0f,
+                    islandOffsetYDp = 8f,
+                    islandTemporaryDismissed = false
+                )
+                "BOTTOM_EDGE" -> current.copy(
+                    islandAnchor = IslandAnchorPreset.BOTTOM_DOCK,
+                    islandOffsetXDp = 0f,
+                    islandOffsetYDp = 268f,
+                    islandTemporaryDismissed = false
+                )
+                "TOP_LEFT", "TOP_LEFT_CORNER" -> current.copy(
+                    islandAnchor = IslandAnchorPreset.TOP_LEFT,
+                    islandOffsetXDp = -142f,
+                    islandOffsetYDp = 12f,
+                    islandTemporaryDismissed = false
+                )
+                "TOP_RIGHT", "TOP_RIGHT_CORNER" -> current.copy(
+                    islandAnchor = IslandAnchorPreset.TOP_RIGHT,
+                    islandOffsetXDp = 142f,
+                    islandOffsetYDp = 12f,
+                    islandTemporaryDismissed = false
+                )
+                "BOTTOM_LEFT", "BOTTOM_LEFT_CORNER" -> current.copy(
+                    islandAnchor = IslandAnchorPreset.BOTTOM_LEFT_CORNER,
+                    islandOffsetXDp = -142f,
+                    islandOffsetYDp = 264f,
+                    islandTemporaryDismissed = false
+                )
+                "BOTTOM_RIGHT", "BOTTOM_RIGHT_CORNER" -> current.copy(
+                    islandAnchor = IslandAnchorPreset.BOTTOM_RIGHT_CORNER,
+                    islandOffsetXDp = 142f,
+                    islandOffsetYDp = 264f,
+                    islandTemporaryDismissed = false
+                )
+                else -> current
+            }
+        }
+        showTemporaryBanner("Остров перемещен к выбранному краю экрана")
+    }
+
     fun setIslandExactOffsetDp(xDp: Float, yDp: Float) {
-        val roundedX = ((xDp.coerceIn(-135f, 135f)) * 2f).roundToInt() / 2f
-        val roundedY = ((yDp.coerceIn(2f, 260f)) * 2f).roundToInt() / 2f
+        val roundedX = ((xDp.coerceIn(-175f, 175f)) * 2f).roundToInt() / 2f
+        val roundedY = ((yDp.coerceIn(0f, 620f)) * 2f).roundToInt() / 2f
         updateConfigAndPersist {
             it.copy(
                 islandAnchor = IslandAnchorPreset.FREE_DRAG,
@@ -1283,6 +1491,164 @@ class LuminaAodViewModel(application: Application) : AndroidViewModel(applicatio
         } else {
             showTemporaryBanner("Ошибка формата JSON: проверьте скопированный код темы")
             false
+        }
+    }
+
+    // v4.0 Granular Element Visibility Toggles & Master Presets
+    fun applyElementsVisibilityPreset(presetMode: String) {
+        updateConfigAndPersist { current ->
+            when (presetMode) {
+                "ALL_ON" -> current.copy(
+                    showClockOnAod = true,
+                    showSeconds = true,
+                    showClockGlowDivider = true,
+                    showDateAndBattery = true,
+                    showDateOnAod = true,
+                    showBatteryIconOnAod = true,
+                    showBatteryPercentOnAod = true,
+                    showWeatherOnAod = true,
+                    showBarometerAndCompassOnAod = true,
+                    showCompassInPill = true,
+                    showBarometerInPill = true,
+                    showPinnedMemoOnAod = true,
+                    showPomodoroOnAod = true,
+                    showNotificationBadges = true,
+                    isDynamicIslandEnabled = true,
+                    isCameraRingEnabled = true,
+                    showCameraCutoutHole = true,
+                    isQuickDockEnabled = true,
+                    showDockTorchBtn = true,
+                    showDockPomodoroBtn = true,
+                    showDockStandByBtn = true,
+                    showDockIceBtn = true,
+                    showIslandLeadingIcon = true,
+                    showIslandDragGrip = true,
+                    islandLiveEqualizerEnabled = true,
+                    islandPrivacyDotEnabled = true,
+                    showIslandUnreadBadge = true,
+                    showIslandExpandArrow = true,
+                    islandQuickTorchEnabled = true,
+                    showIslandOpenAppBtn = true,
+                    showIslandModeTabsInExpanded = true,
+                    showIslandQuickReplies = true,
+                    showIslandCloseBtn = true,
+                    showPreviewCollapsePill = true,
+                    showPreviewStatusBottomBar = true,
+                    showLiveAodControlDock = true,
+                    islandTemporaryDismissed = false
+                )
+                "MINIMAL_CLOCK" -> current.copy(
+                    showClockOnAod = true,
+                    showSeconds = false,
+                    showClockGlowDivider = false,
+                    showDateAndBattery = false,
+                    showDateOnAod = false,
+                    showBatteryIconOnAod = false,
+                    showBatteryPercentOnAod = false,
+                    showWeatherOnAod = false,
+                    showBarometerAndCompassOnAod = false,
+                    showPinnedMemoOnAod = false,
+                    showPomodoroOnAod = false,
+                    showNotificationBadges = false,
+                    isDynamicIslandEnabled = false,
+                    isCameraRingEnabled = false,
+                    showCameraCutoutHole = false,
+                    edgeStyle = EdgeLightingStyle.OFF,
+                    isQuickDockEnabled = false
+                )
+                "BUBBLE_ONLY" -> current.copy(
+                    showClockOnAod = false,
+                    showDateAndBattery = false,
+                    showDateOnAod = false,
+                    showBatteryIconOnAod = false,
+                    showBatteryPercentOnAod = false,
+                    showWeatherOnAod = false,
+                    showBarometerAndCompassOnAod = false,
+                    showPinnedMemoOnAod = false,
+                    showPomodoroOnAod = false,
+                    showNotificationBadges = false,
+                    isDynamicIslandEnabled = true,
+                    isBubbleModeEnabled = true,
+                    islandShape = IslandShapeStyle.FLOATING_BUBBLE,
+                    islandEdgeSnapMode = IslandEdgeSnapMode.LEFT_RIGHT_EDGE_PEEK,
+                    islandOffsetXDp = 148f,
+                    islandOffsetYDp = 135f,
+                    isQuickDockEnabled = false,
+                    islandTemporaryDismissed = false
+                )
+                else -> current
+            }
+        }
+        val msg = when (presetMode) {
+            "ALL_ON" -> "Все 25 визуальных элементов AOD включены!"
+            "MINIMAL_CLOCK" -> "Режим «Чистый минимализм»: только часы (OPR минимален)"
+            "BUBBLE_ONLY" -> "Режим «Только Остров-пузырь у края экрана» активирован"
+            else -> "Пресет элементов обновлен"
+        }
+        showTemporaryBanner(msg)
+    }
+
+    fun setGranularElementEnabled(elementKey: String, enabled: Boolean) {
+        updateConfigAndPersist { c ->
+            when (elementKey) {
+                "showClockOnAod" -> c.copy(showClockOnAod = enabled)
+                "showSeconds" -> c.copy(showSeconds = enabled)
+                "showClockGlowDivider" -> c.copy(showClockGlowDivider = enabled)
+                "showDateAndBattery" -> c.copy(showDateAndBattery = enabled)
+                "showDateOnAod" -> c.copy(showDateOnAod = enabled, showDateAndBattery = enabled || c.showBatteryIconOnAod || c.showBatteryPercentOnAod)
+                "showBatteryIconOnAod" -> c.copy(showBatteryIconOnAod = enabled, showDateAndBattery = enabled || c.showDateOnAod || c.showBatteryPercentOnAod)
+                "showBatteryPercentOnAod" -> c.copy(showBatteryPercentOnAod = enabled, showDateAndBattery = enabled || c.showDateOnAod || c.showBatteryIconOnAod)
+                "showWeatherOnAod" -> c.copy(showWeatherOnAod = enabled)
+                "showBarometerAndCompassOnAod" -> c.copy(showBarometerAndCompassOnAod = enabled)
+                "showCompassInPill" -> c.copy(showCompassInPill = enabled, showBarometerAndCompassOnAod = enabled || c.showBarometerInPill)
+                "showBarometerInPill" -> c.copy(showBarometerInPill = enabled, showBarometerAndCompassOnAod = enabled || c.showCompassInPill)
+                "showPinnedMemoOnAod" -> c.copy(showPinnedMemoOnAod = enabled)
+                "showPomodoroOnAod" -> c.copy(showPomodoroOnAod = enabled)
+                "showNotificationBadges" -> c.copy(showNotificationBadges = enabled)
+                "isDynamicIslandEnabled" -> c.copy(isDynamicIslandEnabled = enabled, islandTemporaryDismissed = false)
+                "isCameraRingEnabled" -> c.copy(isCameraRingEnabled = enabled)
+                "showCameraCutoutHole" -> c.copy(showCameraCutoutHole = enabled)
+                "isQuickDockEnabled" -> c.copy(isQuickDockEnabled = enabled)
+                "showDockTorchBtn" -> c.copy(showDockTorchBtn = enabled)
+                "showDockPomodoroBtn" -> c.copy(showDockPomodoroBtn = enabled)
+                "showDockStandByBtn" -> c.copy(showDockStandByBtn = enabled)
+                "showDockIceBtn" -> c.copy(showDockIceBtn = enabled)
+                "showIslandLeadingIcon" -> c.copy(showIslandLeadingIcon = enabled)
+                "showIslandDragGrip" -> c.copy(showIslandDragGrip = enabled)
+                "islandLiveEqualizerEnabled" -> c.copy(islandLiveEqualizerEnabled = enabled)
+                "islandPrivacyDotEnabled" -> c.copy(islandPrivacyDotEnabled = enabled)
+                "showIslandUnreadBadge" -> c.copy(showIslandUnreadBadge = enabled)
+                "showIslandExpandArrow" -> c.copy(showIslandExpandArrow = enabled)
+                "islandQuickTorchEnabled" -> c.copy(islandQuickTorchEnabled = enabled)
+                "showIslandOpenAppBtn" -> c.copy(showIslandOpenAppBtn = enabled)
+                "showIslandModeTabsInExpanded" -> c.copy(showIslandModeTabsInExpanded = enabled)
+                "showIslandQuickReplies" -> c.copy(showIslandQuickReplies = enabled)
+                "showIslandCloseBtn" -> c.copy(showIslandCloseBtn = enabled)
+                "showPreviewCollapsePill" -> c.copy(showPreviewCollapsePill = enabled)
+                "showPreviewStatusBottomBar" -> c.copy(showPreviewStatusBottomBar = enabled)
+                "showLiveAodControlDock" -> c.copy(showLiveAodControlDock = enabled)
+                else -> c
+            }
+        }
+    }
+
+    fun updateWidgetFineCalibration(
+        clockOpacity: Float = _config.value.clockOpacity,
+        weatherScale: Float = _config.value.weatherWidgetScale,
+        weatherOpacity: Float = _config.value.weatherWidgetOpacity,
+        spacingDp: Float = _config.value.widgetsVerticalSpacingDp,
+        dockScale: Float = _config.value.dockScale,
+        dockOpacity: Float = _config.value.dockOpacity
+    ) {
+        updateConfigAndPersist {
+            it.copy(
+                clockOpacity = clockOpacity.coerceIn(0.2f, 1.0f),
+                weatherWidgetScale = weatherScale.coerceIn(0.7f, 1.3f),
+                weatherWidgetOpacity = weatherOpacity.coerceIn(0.2f, 1.0f),
+                widgetsVerticalSpacingDp = spacingDp.coerceIn(2f, 24f),
+                dockScale = dockScale.coerceIn(0.75f, 1.25f),
+                dockOpacity = dockOpacity.coerceIn(0.2f, 1.0f)
+            )
         }
     }
 

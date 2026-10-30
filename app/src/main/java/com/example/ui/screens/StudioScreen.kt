@@ -129,7 +129,10 @@ fun StudioCustomizationSection(
     onShowIceQrOnAod: () -> Unit = {},
     onApplySmartProfile: (SmartProfilePreset) -> Unit = {},
     onExportConfigJson: () -> String = { "{}" },
-    onImportConfigJson: (String) -> Unit = {}
+    onImportConfigJson: (String) -> Unit = {},
+    onApplyElementsVisibilityPreset: (String) -> Unit = {},
+    onSetGranularElementEnabled: (String, Boolean) -> Unit = { _, _ -> },
+    onUpdateWidgetCalibration: (Float, Float, Float, Float, Float, Float) -> Unit = { _, _, _, _, _, _ -> }
 ) {
     var activeSubTab by rememberSaveable { mutableIntStateOf(0) }
     var customPresetName by remember { mutableStateOf("") }
@@ -145,7 +148,8 @@ fun StudioCustomizationSection(
         "Циферблаты",
         "Края и Цвета",
         "Док и StandBy",
-        "Профили & JSON"
+        "Профили & JSON",
+        "Элементы (${config.countEnabledVisualElements()})"
     )
 
     Column(
@@ -176,11 +180,97 @@ fun StudioCustomizationSection(
                 ) {
                     Text(
                         text = label,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         color = if (selected) PitchBlack else PureWhite,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        // Quick Master-Toggles Banner (accessible from any Studio sub-tab)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1624)),
+            border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.45f))
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Мастер-тумблеры всех элементов AOD",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = PureWhite
+                        )
+                        Text(
+                            text = "Активно ${config.countEnabledVisualElements()}/25 визуальных деталей • Любой элемент отключается отдельно",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.sp,
+                            color = MutedSlate
+                        )
+                    }
+                    Surface(
+                        onClick = { activeSubTab = 4 },
+                        shape = RoundedCornerShape(50),
+                        color = if (activeSubTab == 4) EnergyEmerald else CyberCyan.copy(alpha = 0.2f),
+                        modifier = Modifier.testTag("open_all_elements_toggles_btn")
+                    ) {
+                        Text(
+                            text = if (activeSubTab == 4) "Открыто ✓" else "Настроить все →",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (activeSubTab == 4) PitchBlack else CyberCyan,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = false,
+                        onClick = { onApplyElementsVisibilityPreset("ALL_ON") },
+                        label = { Text("⚡ Включить все (25/25)", fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Color(0xFF142234),
+                            labelColor = CyberCyan
+                        ),
+                        modifier = Modifier.testTag("preset_elements_all_on")
+                    )
+                    FilterChip(
+                        selected = false,
+                        onClick = { onApplyElementsVisibilityPreset("MINIMAL_CLEAN") },
+                        label = { Text("🌙 Чистый минимализм", fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Color(0xFF142234),
+                            labelColor = SolarAmber
+                        ),
+                        modifier = Modifier.testTag("preset_elements_minimal")
+                    )
+                    FilterChip(
+                        selected = false,
+                        onClick = { onApplyElementsVisibilityPreset("ONLY_ISLAND_BUBBLE") },
+                        label = { Text("🫧 Только Остров-пузырь", fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Color(0xFF142234),
+                            labelColor = NeonMagenta
+                        ),
+                        modifier = Modifier.testTag("preset_elements_only_bubble")
                     )
                 }
             }
@@ -1102,6 +1192,557 @@ fun StudioCustomizationSection(
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Импорт JSON", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                             }
+                        }
+                    }
+                }
+            }
+
+            4 -> {
+                // SUB-TAB 4: Granular Individual Element Toggles (33 Switches) + Per-Widget Calibration
+                SectionHeaderRow(
+                    icon = Icons.Default.Tune,
+                    title = "Индивидуальное отключение каждого элемента",
+                    badgeText = "${config.countEnabledVisualElements()}/25 ВКЛ"
+                )
+
+                // Category 1: Clock & Center HUD Elements
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+                    border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.45f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "1. ЧАСЫ, ДАТА И ЦЕНТРАЛЬНЫЕ ИНДИКАТОРЫ",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 11.sp,
+                            color = CyberCyan
+                        )
+                        SettingToggleRow(
+                            title = "Главный циферблат часов (Show Clock)",
+                            subtitle = "Можно полностью отключить часы и оставить только Остров-пузырь или погоду",
+                            checked = config.showClockOnAod,
+                            onCheckedChange = { onSetGranularElementEnabled("showClockOnAod", it) },
+                            testTag = "granular_toggle_showClockOnAod"
+                        )
+                        SettingToggleRow(
+                            title = "Секунды и живое двоеточие",
+                            subtitle = "Отображение секундного отсчета на циферблате",
+                            checked = config.showSeconds,
+                            onCheckedChange = { onSetGranularElementEnabled("showSeconds", it) },
+                            testTag = "granular_toggle_showSeconds"
+                        )
+                        SettingToggleRow(
+                            title = "Неоновый разделитель под часами",
+                            subtitle = "Горизонтальная светящаяся линия между часами и датой",
+                            checked = config.showClockGlowDivider,
+                            onCheckedChange = { onSetGranularElementEnabled("showClockGlowDivider", it) },
+                            testTag = "granular_toggle_showClockGlowDivider"
+                        )
+                        SettingToggleRow(
+                            title = "Строка даты и дня недели",
+                            subtitle = "Отображение текущей даты под циферблатом",
+                            checked = config.showDateOnAod,
+                            onCheckedChange = { onSetGranularElementEnabled("showDateOnAod", it) },
+                            testTag = "granular_toggle_showDateOnAod"
+                        )
+                        SettingToggleRow(
+                            title = "Графическая иконка батареи",
+                            subtitle = "Контур аккумулятора с цветовым уровнем заряда",
+                            checked = config.showBatteryIconOnAod,
+                            onCheckedChange = { onSetGranularElementEnabled("showBatteryIconOnAod", it) },
+                            testTag = "granular_toggle_showBatteryIconOnAod"
+                        )
+                        SettingToggleRow(
+                            title = "Процент заряда и статус кабеля",
+                            subtitle = "Числовое значение заряда батареи рядом с датой",
+                            checked = config.showBatteryPercentOnAod,
+                            onCheckedChange = { onSetGranularElementEnabled("showBatteryPercentOnAod", it) },
+                            testTag = "granular_toggle_showBatteryPercentOnAod"
+                        )
+                    }
+                }
+
+                // Category 2: Weather, Sensors, Memo, Pomodoro & Badges
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+                    border = BorderStroke(1.dp, EnergyEmerald.copy(alpha = 0.45f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "2. ПОГОДА, ДАТЧИКИ, ЗАМЕТКА И POMODORO",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 11.sp,
+                            color = EnergyEmerald
+                        )
+                        SettingToggleRow(
+                            title = "Виджет погоды на экране AOD",
+                            subtitle = "Температура, ветер и ультрафиолетовый индекс",
+                            checked = config.showWeatherOnAod,
+                            onCheckedChange = { onSetGranularElementEnabled("showWeatherOnAod", it) },
+                            testTag = "granular_toggle_showWeatherOnAod"
+                        )
+                        SettingToggleRow(
+                            title = "Магнитный компас в погодной капсуле",
+                            subtitle = "Азимут и направление сторон света в реальном времени",
+                            checked = config.showCompassInPill,
+                            onCheckedChange = { onSetGranularElementEnabled("showCompassInPill", it) },
+                            testTag = "granular_toggle_showCompassInPill"
+                        )
+                        SettingToggleRow(
+                            title = "Барометр (гПа) в погодной капсуле",
+                            subtitle = "Атмосферное давление внутри погодного виджета",
+                            checked = config.showBarometerInPill,
+                            onCheckedChange = { onSetGranularElementEnabled("showBarometerInPill", it) },
+                            testTag = "granular_toggle_showBarometerInPill"
+                        )
+                        SettingToggleRow(
+                            title = "Закрепленная заметка (Pinned Memo)",
+                            subtitle = "Ваше напоминание или чек-лист под виджетом погоды",
+                            checked = config.showPinnedMemoOnAod,
+                            onCheckedChange = { onSetGranularElementEnabled("showPinnedMemoOnAod", it) },
+                            testTag = "granular_toggle_showPinnedMemoOnAod"
+                        )
+                        SettingToggleRow(
+                            title = "Кольцо и капсула Фокус-таймера Pomodoro",
+                            subtitle = "Орбитальный прогресс-бар и обратный отсчет на AOD",
+                            checked = config.showPomodoroOnAod,
+                            onCheckedChange = { onSetGranularElementEnabled("showPomodoroOnAod", it) },
+                            testTag = "granular_toggle_showPomodoroOnAod"
+                        )
+                        SettingToggleRow(
+                            title = "Неоновые бейджи уведомлений приложений",
+                            subtitle = "Цветные иконки последних пушей в нижней части экрана",
+                            checked = config.showNotificationBadges,
+                            onCheckedChange = { onSetGranularElementEnabled("showNotificationBadges", it) },
+                            testTag = "granular_toggle_showNotificationBadges"
+                        )
+                    }
+                }
+
+                // Category 3: Quick Dock & Individual Dock Buttons
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+                    border = BorderStroke(1.dp, SolarAmber.copy(alpha = 0.45f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "3. БЫСТРЫЙ ДОК И КАЖДАЯ КНОПКА ОТДЕЛЬНО",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 11.sp,
+                            color = SolarAmber
+                        )
+                        SettingToggleRow(
+                            title = "Панель Быстрого Дока (Quick Action Dock)",
+                            subtitle = "Вся нижняя панель быстрых инструментов на экране AOD",
+                            checked = config.isQuickDockEnabled,
+                            onCheckedChange = { onSetGranularElementEnabled("isQuickDockEnabled", it) },
+                            testTag = "granular_toggle_isQuickDockEnabled"
+                        )
+                        SettingToggleRow(
+                            title = "Кнопка «Фонарик» в Доке",
+                            subtitle = "Показывать или скрыть кнопку вспышки в доке",
+                            checked = config.showDockTorchBtn,
+                            onCheckedChange = { onSetGranularElementEnabled("showDockTorchBtn", it) },
+                            testTag = "granular_toggle_showDockTorchBtn"
+                        )
+                        SettingToggleRow(
+                            title = "Кнопка «Фокус Pomodoro» в Доке",
+                            subtitle = "Показывать или скрыть запуск 25-минутного таймера",
+                            checked = config.showDockPomodoroBtn,
+                            onCheckedChange = { onSetGranularElementEnabled("showDockPomodoroBtn", it) },
+                            testTag = "granular_toggle_showDockPomodoroBtn"
+                        )
+                        SettingToggleRow(
+                            title = "Кнопка «Ночной StandBy» в Доке",
+                            subtitle = "Показывать или скрыть переключатель ночного дока",
+                            checked = config.showDockStandByBtn,
+                            onCheckedChange = { onSetGranularElementEnabled("showDockStandByBtn", it) },
+                            testTag = "granular_toggle_showDockStandByBtn"
+                        )
+                        SettingToggleRow(
+                            title = "Кнопка «ICE Медкарта QR» в Доке",
+                            subtitle = "Показывать или скрыть экстренный вызов QR-карты",
+                            checked = config.showDockIceBtn,
+                            onCheckedChange = { onSetGranularElementEnabled("showDockIceBtn", it) },
+                            testTag = "granular_toggle_showDockIceBtn"
+                        )
+                    }
+                }
+
+                // Category 4: Dynamic Island Sub-Elements & Camera Cutout
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+                    border = BorderStroke(1.dp, NeonMagenta.copy(alpha = 0.45f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "4. ДЕТАЛИ ДИНАМИЧЕСКОГО ОСТРОВА И КАМЕРЫ",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 11.sp,
+                            color = NeonMagenta
+                        )
+                        SettingToggleRow(
+                            title = "Динамический Остров / Плавающий Пузырь",
+                            subtitle = "Главный переключатель интерактивного острова",
+                            checked = config.isDynamicIslandEnabled,
+                            onCheckedChange = { onSetGranularElementEnabled("isDynamicIslandEnabled", it) },
+                            testTag = "granular_toggle_isDynamicIslandEnabled"
+                        )
+                        SettingToggleRow(
+                            title = "Световое кольцо вокруг камеры (aodNotify)",
+                            subtitle = "Неоновый ободок заряда и уведомлений вокруг селфи-камеры",
+                            checked = config.isCameraRingEnabled,
+                            onCheckedChange = { onSetGranularElementEnabled("isCameraRingEnabled", it) },
+                            testTag = "granular_toggle_isCameraRingEnabled"
+                        )
+                        SettingToggleRow(
+                            title = "Черный кружок выреза камеры (Punch-Hole)",
+                            subtitle = "Отрисовка физического отверстия камеры на превью",
+                            checked = config.showCameraCutoutHole,
+                            onCheckedChange = { onSetGranularElementEnabled("showCameraCutoutHole", it) },
+                            testTag = "granular_toggle_showCameraCutoutHole"
+                        )
+                        SettingToggleRow(
+                            title = "Иконка категории слева в Острове",
+                            subtitle = "Круглый бейдж приложения/музыки/таймера",
+                            checked = config.showIslandLeadingIcon,
+                            onCheckedChange = { onSetGranularElementEnabled("showIslandLeadingIcon", it) },
+                            testTag = "granular_toggle_showIslandLeadingIcon"
+                        )
+                        SettingToggleRow(
+                            title = "Точка индикатора перетаскивания (Drag Grip)",
+                            subtitle = "Мини-маркер захвата для перемещения Острова пальцем",
+                            checked = config.showIslandDragGrip,
+                            onCheckedChange = { onSetGranularElementEnabled("showIslandDragGrip", it) },
+                            testTag = "granular_toggle_showIslandDragGrip"
+                        )
+                        SettingToggleRow(
+                            title = "Живой аудио-эквалайзер в Острове",
+                            subtitle = "Анимированные столбики спектра справа в капсуле",
+                            checked = config.islandLiveEqualizerEnabled,
+                            onCheckedChange = { onSetGranularElementEnabled("islandLiveEqualizerEnabled", it) },
+                            testTag = "granular_toggle_islandLiveEqualizerEnabled"
+                        )
+                        SettingToggleRow(
+                            title = "Точка приватности микрофона и камеры",
+                            subtitle = "Зеленый/оранжевый индикатор доступа к сенсорам",
+                            checked = config.islandPrivacyDotEnabled,
+                            onCheckedChange = { onSetGranularElementEnabled("islandPrivacyDotEnabled", it) },
+                            testTag = "granular_toggle_islandPrivacyDotEnabled"
+                        )
+                        SettingToggleRow(
+                            title = "Счетчик непрочитанных пушей в Острове",
+                            subtitle = "Круглый бейдж с количеством активных уведомлений",
+                            checked = config.showIslandUnreadBadge,
+                            onCheckedChange = { onSetGranularElementEnabled("showIslandUnreadBadge", it) },
+                            testTag = "granular_toggle_showIslandUnreadBadge"
+                        )
+                        SettingToggleRow(
+                            title = "Стрелка раскрытия/сворачивания (▼/▲)",
+                            subtitle = "Кнопка переключения размера Острова в правой части",
+                            checked = config.showIslandExpandArrow,
+                            onCheckedChange = { onSetGranularElementEnabled("showIslandExpandArrow", it) },
+                            testTag = "granular_toggle_showIslandExpandArrow"
+                        )
+                        SettingToggleRow(
+                            title = "Кнопка фонарика внутри раскрытого Острова",
+                            subtitle = "Быстрое включение вспышки в шапке Острова",
+                            checked = config.islandQuickTorchEnabled,
+                            onCheckedChange = { onSetGranularElementEnabled("islandQuickTorchEnabled", it) },
+                            testTag = "granular_toggle_islandQuickTorchEnabled"
+                        )
+                        SettingToggleRow(
+                            title = "Кнопка «В приложение» в шапке Острова",
+                            subtitle = "Переход в родительское приложение уведомления",
+                            checked = config.showIslandOpenAppBtn,
+                            onCheckedChange = { onSetGranularElementEnabled("showIslandOpenAppBtn", it) },
+                            testTag = "granular_toggle_showIslandOpenAppBtn"
+                        )
+                        SettingToggleRow(
+                            title = "Вкладки переключения 8 режимов в Острове",
+                            subtitle = "Полоса чипов (Музыка, Таймер, Сообщение, Радар и др.)",
+                            checked = config.showIslandModeTabsInExpanded,
+                            onCheckedChange = { onSetGranularElementEnabled("showIslandModeTabsInExpanded", it) },
+                            testTag = "granular_toggle_showIslandModeTabsInExpanded"
+                        )
+                        SettingToggleRow(
+                            title = "Чипы быстрых ответов в сообщениях",
+                            subtitle = "Кнопки «👍 Ок», «На совещании», «Через 5 мин»",
+                            checked = config.showIslandQuickReplies,
+                            onCheckedChange = { onSetGranularElementEnabled("showIslandQuickReplies", it) },
+                            testTag = "granular_toggle_showIslandQuickReplies"
+                        )
+                        SettingToggleRow(
+                            title = "Кнопка закрытия Острова (✕)",
+                            subtitle = "Сворачивание раскрытой карточки в правом верхнем углу",
+                            checked = config.showIslandCloseBtn,
+                            onCheckedChange = { onSetGranularElementEnabled("showIslandCloseBtn", it) },
+                            testTag = "granular_toggle_showIslandCloseBtn"
+                        )
+                    }
+                }
+
+                // Category 5: Preview & Live AOD HUD Chrome
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+                    border = BorderStroke(1.dp, ObsidianBorder)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "5. СЛУЖЕБНЫЕ ПАНЕЛИ ПРЕВЬЮ И ЖИВОГО AOD",
+                            fontFamily = ShareTechMonoFontFamily,
+                            fontSize = 11.sp,
+                            color = CyberCyan
+                        )
+                        SettingToggleRow(
+                            title = "Кнопка «Свернуть превью» на карточке",
+                            subtitle = "Верхняя кнопка сворачивания живого превью в мини-бар",
+                            checked = config.showPreviewCollapsePill,
+                            onCheckedChange = { onSetGranularElementEnabled("showPreviewCollapsePill", it) },
+                            testTag = "granular_toggle_showPreviewCollapsePill"
+                        )
+                        SettingToggleRow(
+                            title = "Нижняя строка статуса и координат на превью",
+                            subtitle = "Индикатор OPR, координат X/Y и кнопка запуска во весь экран",
+                            checked = config.showPreviewStatusBottomBar,
+                            onCheckedChange = { onSetGranularElementEnabled("showPreviewStatusBottomBar", it) },
+                            testTag = "granular_toggle_showPreviewStatusBottomBar"
+                        )
+                        SettingToggleRow(
+                            title = "Нижняя панель управления в полноэкранном Live AOD",
+                            subtitle = "Отключите для 100% чистого экрана (выход двойным тапом)",
+                            checked = config.showLiveAodControlDock,
+                            onCheckedChange = { onSetGranularElementEnabled("showLiveAodControlDock", it) },
+                            testTag = "granular_toggle_showLiveAodControlDock"
+                        )
+                    }
+                }
+
+                // Category 6: Fine Calibration Sliders (Opacity, Scale, Spacing)
+                SectionHeaderRow(
+                    icon = Icons.Default.AutoAwesome,
+                    title = "Тонкая калибровка прозрачности, масштаба и отступов",
+                    badgeText = "Micro-Tune"
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+                    border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.45f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Clock Opacity
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Прозрачность циферблата часов", style = MaterialTheme.typography.bodySmall, color = PureWhite)
+                                Text(
+                                    text = "${(config.clockOpacity * 100).toInt()}%",
+                                    fontFamily = ShareTechMonoFontFamily,
+                                    fontSize = 12.sp,
+                                    color = CyberCyan
+                                )
+                            }
+                            Slider(
+                                value = config.clockOpacity,
+                                onValueChange = { newVal ->
+                                    onUpdateWidgetCalibration(
+                                        newVal,
+                                        config.weatherWidgetScale,
+                                        config.weatherWidgetOpacity,
+                                        config.widgetsVerticalSpacingDp,
+                                        config.dockScale,
+                                        config.dockOpacity
+                                    )
+                                },
+                                valueRange = 0.15f..1.0f,
+                                colors = SliderDefaults.colors(thumbColor = CyberCyan, activeTrackColor = CyberCyan)
+                            )
+                        }
+
+                        // Weather Scale
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Масштаб виджета погоды и датчиков", style = MaterialTheme.typography.bodySmall, color = PureWhite)
+                                Text(
+                                    text = "${(config.weatherWidgetScale * 100).toInt()}%",
+                                    fontFamily = ShareTechMonoFontFamily,
+                                    fontSize = 12.sp,
+                                    color = EnergyEmerald
+                                )
+                            }
+                            Slider(
+                                value = config.weatherWidgetScale,
+                                onValueChange = { newVal ->
+                                    onUpdateWidgetCalibration(
+                                        config.clockOpacity,
+                                        newVal,
+                                        config.weatherWidgetOpacity,
+                                        config.widgetsVerticalSpacingDp,
+                                        config.dockScale,
+                                        config.dockOpacity
+                                    )
+                                },
+                                valueRange = 0.65f..1.35f,
+                                colors = SliderDefaults.colors(thumbColor = EnergyEmerald, activeTrackColor = EnergyEmerald)
+                            )
+                        }
+
+                        // Weather Opacity
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Прозрачность виджета погоды", style = MaterialTheme.typography.bodySmall, color = PureWhite)
+                                Text(
+                                    text = "${(config.weatherWidgetOpacity * 100).toInt()}%",
+                                    fontFamily = ShareTechMonoFontFamily,
+                                    fontSize = 12.sp,
+                                    color = EnergyEmerald
+                                )
+                            }
+                            Slider(
+                                value = config.weatherWidgetScale.let { config.weatherWidgetOpacity },
+                                onValueChange = { newVal ->
+                                    onUpdateWidgetCalibration(
+                                        config.clockOpacity,
+                                        config.weatherWidgetScale,
+                                        newVal,
+                                        config.widgetsVerticalSpacingDp,
+                                        config.dockScale,
+                                        config.dockOpacity
+                                    )
+                                },
+                                valueRange = 0.15f..1.0f,
+                                colors = SliderDefaults.colors(thumbColor = EnergyEmerald, activeTrackColor = EnergyEmerald)
+                            )
+                        }
+
+                        // Vertical Spacing between widgets
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Вертикальный интервал между виджетами", style = MaterialTheme.typography.bodySmall, color = PureWhite)
+                                Text(
+                                    text = "${config.widgetsVerticalSpacingDp.toInt()} dp",
+                                    fontFamily = ShareTechMonoFontFamily,
+                                    fontSize = 12.sp,
+                                    color = SolarAmber
+                                )
+                            }
+                            Slider(
+                                value = config.widgetsVerticalSpacingDp,
+                                onValueChange = { newVal ->
+                                    onUpdateWidgetCalibration(
+                                        config.clockOpacity,
+                                        config.weatherWidgetScale,
+                                        config.weatherWidgetOpacity,
+                                        newVal,
+                                        config.dockScale,
+                                        config.dockOpacity
+                                    )
+                                },
+                                valueRange = 0f..36f,
+                                colors = SliderDefaults.colors(thumbColor = SolarAmber, activeTrackColor = SolarAmber)
+                            )
+                        }
+
+                        // Dock Scale & Opacity
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Масштаб панели Быстрого Дока", style = MaterialTheme.typography.bodySmall, color = PureWhite)
+                                Text(
+                                    text = "${(config.dockScale * 100).toInt()}%",
+                                    fontFamily = ShareTechMonoFontFamily,
+                                    fontSize = 12.sp,
+                                    color = NeonMagenta
+                                )
+                            }
+                            Slider(
+                                value = config.dockScale,
+                                onValueChange = { newVal ->
+                                    onUpdateWidgetCalibration(
+                                        config.clockOpacity,
+                                        config.weatherWidgetScale,
+                                        config.weatherWidgetOpacity,
+                                        config.widgetsVerticalSpacingDp,
+                                        newVal,
+                                        config.dockOpacity
+                                    )
+                                },
+                                valueRange = 0.70f..1.30f,
+                                colors = SliderDefaults.colors(thumbColor = NeonMagenta, activeTrackColor = NeonMagenta)
+                            )
+                        }
+
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Прозрачность панели Быстрого Дока", style = MaterialTheme.typography.bodySmall, color = PureWhite)
+                                Text(
+                                    text = "${(config.dockOpacity * 100).toInt()}%",
+                                    fontFamily = ShareTechMonoFontFamily,
+                                    fontSize = 12.sp,
+                                    color = NeonMagenta
+                                )
+                            }
+                            Slider(
+                                value = config.dockOpacity,
+                                onValueChange = { newVal ->
+                                    onUpdateWidgetCalibration(
+                                        config.clockOpacity,
+                                        config.weatherWidgetScale,
+                                        config.weatherWidgetOpacity,
+                                        config.widgetsVerticalSpacingDp,
+                                        config.dockScale,
+                                        newVal
+                                    )
+                                },
+                                valueRange = 0.15f..1.0f,
+                                colors = SliderDefaults.colors(thumbColor = NeonMagenta, activeTrackColor = NeonMagenta)
+                            )
                         }
                     }
                 }

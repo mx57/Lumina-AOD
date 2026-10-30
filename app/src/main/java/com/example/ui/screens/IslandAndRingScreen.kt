@@ -75,6 +75,9 @@ import com.example.model.AodConfigurationState
 import com.example.model.CameraRingMode
 import com.example.model.IslandActivityType
 import com.example.model.IslandAnchorPreset
+import com.example.model.IslandBubbleExpandMode
+import com.example.model.IslandEdgeSnapMode
+import com.example.model.IslandEntranceAnimation
 import com.example.model.IslandShapeStyle
 import com.example.model.IslandTapAction
 import com.example.model.IslandVisibilityMode
@@ -125,14 +128,22 @@ fun IslandAndRingSection(
     onSelectCameraRingMode: (CameraRingMode) -> Unit,
     onUpdateCameraHolePosition: (Float, Float, Float, Float) -> Unit,
     onTriggerSimulatedNotification: (AppColorRuleEntity) -> Unit,
-    onClearNotifications: () -> Unit
+    onClearNotifications: () -> Unit,
+    onToggleBubbleMode: (Boolean) -> Unit = {},
+    onChangeBubbleSizeDp: (Float) -> Unit = {},
+    onSelectBubbleExpandMode: (IslandBubbleExpandMode) -> Unit = {},
+    onSelectEdgeSnapMode: (IslandEdgeSnapMode) -> Unit = {},
+    onToggleEdgePeek: (Boolean) -> Unit = {},
+    onSnapIslandToEdgeShortcut: (String) -> Unit = {},
+    onSelectEntranceAnimation: (IslandEntranceAnimation) -> Unit = {},
+    onTriggerEntranceAnimationPreview: () -> Unit = {}
 ) {
     var activeIslandSubTab by rememberSaveable { mutableIntStateOf(0) }
     val islandSubTabs = listOf(
-        "Формы (11)",
-        "Жесты & Пуши",
+        "Формы & Пузырь",
+        "Жесты & 9 Анимаций",
         "Строка & Хаб",
-        "Позиция & Кольцо"
+        "Края & Позиция"
     )
 
     Column(
@@ -163,7 +174,7 @@ fun IslandAndRingSection(
                 ) {
                     Text(
                         text = title,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         color = if (selected) PitchBlack else PureWhite,
                         maxLines = 1,
@@ -176,8 +187,8 @@ fun IslandAndRingSection(
         // 1. Dynamic Island Master Card + Quick Activity Mode Switcher
         SectionHeaderRow(
             icon = Icons.Default.DynamicFeed,
-            title = "Динамический Остров 2026 (11 Форм & Мульти-Хаб)",
-            badgeText = config.islandShape.titleRu
+            title = "Динамический Остров 2026 (Пузырь, Края и 9 Анимаций)",
+            badgeText = if (config.isEffectiveBubbleMode) "ПУЗЫРЬ" else config.islandShape.titleRu
         )
 
         Card(
@@ -433,6 +444,114 @@ fun IslandAndRingSection(
                                 color = MutedSlate,
                                 fontSize = 11.sp
                             )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2B. 9 Entrance Animations on Notification Arrival
+        SectionHeaderRow(
+            icon = Icons.Default.AutoAwesome,
+            title = "9 Анимаций появления Острова при уведомлении",
+            badgeText = config.islandEntranceAnimation.titleRu
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+            border = BorderStroke(1.dp, NeonMagenta.copy(alpha = 0.55f))
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Кинематографичный вход при пуше",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = PureWhite
+                        )
+                        Text(
+                            text = "Выберите физику и шейдер появления Острова/Пузыря в момент прихода уведомления",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MutedSlate
+                        )
+                    }
+                    Button(
+                        onClick = onTriggerEntranceAnimationPreview,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = NeonMagenta,
+                            contentColor = PitchBlack
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.testTag("test_entrance_animation_btn")
+                    ) {
+                        Text("▶ Тест", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IslandEntranceAnimation.entries.chunked(2).forEach { rowAnims ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowAnims.forEach { anim ->
+                                val selected = config.islandEntranceAnimation == anim
+                                Card(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { onSelectEntranceAnimation(anim) }
+                                        .testTag("island_anim_${anim.id}"),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selected) Color(0xFF22132E) else Color(0xFF0E131D)
+                                    ),
+                                    border = BorderStroke(
+                                        width = if (selected) 1.5.dp else 1.dp,
+                                        color = if (selected) NeonMagenta else ObsidianBorder
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = anim.titleRu,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (selected) NeonMagenta else PureWhite,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Text(
+                                            text = anim.subtitleRu,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontSize = 10.sp,
+                                            color = MutedSlate,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                            if (rowAnims.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
@@ -702,10 +821,108 @@ fun IslandAndRingSection(
         }
 
         if (activeIslandSubTab == 0) {
-        // 4. 11 Geometric Shapes Selector
+        // 4A. Floating Bubble Mode ("Режим Острова-Пузыря") & Tap Expansion Choice ("Полный текст или Бегущая строка")
+        SectionHeaderRow(
+            icon = Icons.Default.TouchApp,
+            title = "Режим Острова-Пузыря (Floating Bubble)",
+            badgeText = if (config.isEffectiveBubbleMode) "Пузырь ${config.bubbleSizeDp.toInt()}dp" else "Капсула"
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = ObsidianCard),
+            border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.55f))
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Вид плавающего пузыря (Bubble Mode)",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = PureWhite
+                        )
+                        Text(
+                            text = "Компактный круглый пузырь, прилипающий к краям экрана. При нажатии показывает полный текст сообщения или бегущую строку",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MutedSlate
+                        )
+                    }
+                    Switch(
+                        checked = config.isEffectiveBubbleMode,
+                        onCheckedChange = onToggleBubbleMode,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = PitchBlack,
+                            checkedTrackColor = CyberCyan
+                        ),
+                        modifier = Modifier.testTag("toggle_bubble_mode_switch")
+                    )
+                }
+
+                IslandSliderControl(
+                    label = "Диаметр плавающего пузыря",
+                    valueText = "${config.bubbleSizeDp.toInt()} dp",
+                    value = config.bubbleSizeDp,
+                    range = 38f..76f,
+                    color = CyberCyan,
+                    onValueChange = onChangeBubbleSizeDp
+                )
+
+                Text(
+                    text = "ЧТО ПОКАЗЫВАТЬ ПОСЛЕ НАЖАТИЯ НА ПУЗЫРЬ",
+                    fontFamily = ShareTechMonoFontFamily,
+                    fontSize = 11.sp,
+                    color = NeonMagenta
+                )
+
+                IslandBubbleExpandMode.entries.forEach { expandMode ->
+                    val selected = config.bubbleExpandMode == expandMode
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (selected) NeonMagenta.copy(alpha = 0.14f) else Color(0xFF0E131D))
+                            .border(
+                                width = if (selected) 1.5.dp else 1.dp,
+                                color = if (selected) NeonMagenta else ObsidianBorder,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .clickable { onSelectBubbleExpandMode(expandMode) }
+                            .padding(12.dp)
+                            .testTag("bubble_expand_mode_${expandMode.id}"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = expandMode.titleRu,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (selected) NeonMagenta else PureWhite
+                            )
+                            Text(
+                                text = expandMode.subtitleRu,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MutedSlate,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4B. 12 Geometric Shapes Selector
         SectionHeaderRow(
             icon = Icons.Default.AutoAwesome,
-            title = "Геометрия и Формы Острова (11 Видов)",
+            title = "Геометрия и Формы Острова (12 Видов)",
             badgeText = "Liquid Morph"
         )
 
@@ -778,10 +995,10 @@ fun IslandAndRingSection(
         }
 
         if (activeIslandSubTab == 3) {
-        // 5. Free Drag-and-Drop, Anchor Presets & 0.5dp Precision X/Y Calibration
+        // 5. Edge Snapping, Free Full-Screen Drag-and-Drop & 0.5dp Precision X/Y Calibration
         SectionHeaderRow(
             icon = Icons.Default.OpenWith,
-            title = "Перемещение Пальцем и Позиция на Экране",
+            title = "Прилипание к краям и Перемещение по всему экрану",
             badgeText = "X:${config.islandOffsetXDp} Y:${config.islandOffsetYDp}dp"
         )
 
@@ -802,13 +1019,13 @@ fun IslandAndRingSection(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Свободное перетаскивание пальцем (Drag-and-Drop)",
+                            text = "Свободное перемещение по всему экрану (Drag-and-Drop)",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = PureWhite
                         )
                         Text(
-                            text = "Тяните Остров прямо на превью или экране Живого AOD в любую точку",
+                            text = "Перетаскивайте Остров или Пузырь пальцем в абсолютно любое место экрана",
                             style = MaterialTheme.typography.bodySmall,
                             color = MutedSlate
                         )
@@ -823,6 +1040,47 @@ fun IslandAndRingSection(
                     )
                 }
 
+                Text(
+                    text = "РЕЖИМ ПРИЛИПАНИЯ К КРАЯМ ЭКРАНА (EDGE SNAP)",
+                    fontFamily = ShareTechMonoFontFamily,
+                    fontSize = 11.sp,
+                    color = EnergyEmerald
+                )
+
+                IslandEdgeSnapMode.entries.forEach { snapMode ->
+                    val selected = config.islandEdgeSnapMode == snapMode
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (selected) EnergyEmerald.copy(alpha = 0.14f) else Color(0xFF0E131D))
+                            .border(
+                                width = if (selected) 1.5.dp else 1.dp,
+                                color = if (selected) EnergyEmerald else ObsidianBorder,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .clickable { onSelectEdgeSnapMode(snapMode) }
+                            .padding(12.dp)
+                            .testTag("edge_snap_mode_${snapMode.id}"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = snapMode.titleRu,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (selected) EnergyEmerald else PureWhite
+                            )
+                            Text(
+                                text = snapMode.subtitleRu,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MutedSlate,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -830,29 +1088,61 @@ fun IslandAndRingSection(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Магнитная привязка к оси центра (X = 0 dp)",
+                            text = "Авто-скрытие половины пузыря за край (Edge Peek)",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = PureWhite
                         )
                         Text(
-                            text = "Мягкое примагничивание к центру при перетаскивании",
+                            text = "Когда пузырь прилип к левому или правому краю, половина уходит за грань до нажатия",
                             style = MaterialTheme.typography.bodySmall,
                             color = MutedSlate
                         )
                     }
                     Switch(
-                        checked = config.islandMagneticSnap,
-                        onCheckedChange = onToggleMagneticSnap,
+                        checked = config.islandEdgePeekEnabled,
+                        onCheckedChange = onToggleEdgePeek,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = PitchBlack,
                             checkedTrackColor = EnergyEmerald
-                        )
+                        ),
+                        modifier = Modifier.testTag("toggle_edge_peek_switch")
                     )
                 }
 
                 Text(
-                    text = "БЫСТРЫЕ ЯКОРЯ ПОЛОЖЕНИЯ НА ЭКРАНЕ",
+                    text = "БЫСТРОЕ ПРИКРЕПЛЕНИЕ К КРАЯМ И УГЛАМ ЭКРАНА",
+                    fontFamily = ShareTechMonoFontFamily,
+                    fontSize = 11.sp,
+                    color = NeonMagenta
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "LEFT_EDGE" to "◀ Левый край",
+                        "RIGHT_EDGE" to "Правый край ▶",
+                        "TOP_EDGE" to "▲ Верх",
+                        "BOTTOM_EDGE" to "▼ Низ",
+                        "TOP_LEFT_CORNER" to "◤ Левый верх",
+                        "TOP_RIGHT_CORNER" to "◥ Правый верх",
+                        "BOTTOM_LEFT_CORNER" to "◣ Левый низ",
+                        "BOTTOM_RIGHT_CORNER" to "◢ Правый низ"
+                    ).forEach { (edgeKey, label) ->
+                        SurfacePillButton(
+                            label = label,
+                            accent = CyberCyan,
+                            onClick = { onSnapIslandToEdgeShortcut(edgeKey) }
+                        )
+                    }
+                }
+
+                Text(
+                    text = "КЛАССИЧЕСКИЕ ЯКОРЯ ПОЛОЖЕНИЯ",
                     fontFamily = ShareTechMonoFontFamily,
                     fontSize = 11.sp,
                     color = CyberCyan
@@ -881,19 +1171,19 @@ fun IslandAndRingSection(
                 }
 
                 PrecisionAxisRow(
-                    label = "Горизонталь X (Лево / Право)",
+                    label = "Горизонталь X (По всему экрану: Левый ↔ Правый край)",
                     valueDp = config.islandOffsetXDp,
-                    minVal = -135f,
-                    maxVal = 135f,
+                    minVal = -175f,
+                    maxVal = 175f,
                     accentColor = CyberCyan,
                     onValueChange = { newX -> onUpdateIslandExactOffset(newX, config.islandOffsetYDp) }
                 )
 
                 PrecisionAxisRow(
-                    label = "Вертикаль Y (Верх / Центр / Низ)",
+                    label = "Вертикаль Y (По всему экрану: Верх ↔ Центр ↔ Низ)",
                     valueDp = config.islandOffsetYDp,
-                    minVal = 2f,
-                    maxVal = 250f,
+                    minVal = 0f,
+                    maxVal = 320f,
                     accentColor = NeonMagenta,
                     onValueChange = { newY -> onUpdateIslandExactOffset(config.islandOffsetXDp, newY) }
                 )
@@ -1323,11 +1613,11 @@ private fun ShapeMiniPreviewIcon(shape: IslandShapeStyle, accent: Color) {
                     .border(1.5.dp, accent, CutCornerShape(4.dp))
             )
         }
-        IslandShapeStyle.LIQUID_SPHERE, IslandShapeStyle.STARLIGHT_ORB -> {
+        IslandShapeStyle.LIQUID_SPHERE, IslandShapeStyle.STARLIGHT_ORB, IslandShapeStyle.FLOATING_BUBBLE -> {
             Box(
                 modifier = Modifier
-                    .width(26.dp)
-                    .height(15.dp)
+                    .width(22.dp)
+                    .height(22.dp)
                     .clip(CircleShape)
                     .background(accent.copy(alpha = 0.35f))
                     .border(1.5.dp, accent, CircleShape)

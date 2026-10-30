@@ -179,6 +179,7 @@ fun LuminaAodAppRoot(
     val installedApps by viewModel.installedApps.collectAsStateWithLifecycle()
     val recentNotifications by viewModel.recentNotifications.collectAsStateWithLifecycle()
     val hasRecentPushEvent by viewModel.hasRecentPushEvent.collectAsStateWithLifecycle()
+    val lastPulseTimestamp by viewModel.lastNotificationPulseTimestamp.collectAsStateWithLifecycle()
     val permissionStatus by viewModel.permissionStatus.collectAsStateWithLifecycle()
     val bannerMessage by viewModel.statusBannerMessage.collectAsStateWithLifecycle()
 
@@ -340,6 +341,7 @@ fun LuminaAodAppRoot(
                                 callState = callState,
                                 recentNotifications = recentNotifications,
                                 hasRecentPushEvent = hasRecentPushEvent,
+                                entrancePulseTimestamp = lastPulseTimestamp,
                                 onToggleIslandExpand = viewModel::toggleIslandExpanded,
                                 onPrimaryTapIsland = viewModel::handleIslandPrimaryTap,
                                 onLongPressIsland = viewModel::handleIslandLongPress,
@@ -350,6 +352,8 @@ fun LuminaAodAppRoot(
                                     viewModel.setActiveIslandActivity(act, expandImmediately = true)
                                 },
                                 onDragIslandByDeltaDp = viewModel::onDragIslandByDeltaDp,
+                                onDragIslandEnd = viewModel::onDragIslandEnd,
+                                onChangeBubbleExpandMode = viewModel::setBubbleExpandMode,
                                 onResetIslandPosition = viewModel::resetIslandPositionToCamera,
                                 onPlayPauseMedia = viewModel::toggleMediaPlayPause,
                                 onNextTrack = viewModel::skipToNextTrack,
@@ -406,7 +410,10 @@ fun LuminaAodAppRoot(
                                 onShowIceQrOnAod = { viewModel.setIceQrModalVisible(true) },
                                 onApplySmartProfile = viewModel::applySmartProfile,
                                 onExportConfigJson = viewModel::exportConfigurationJson,
-                                onImportConfigJson = viewModel::importConfigurationJson
+                                onImportConfigJson = viewModel::importConfigurationJson,
+                                onApplyElementsVisibilityPreset = viewModel::applyElementsVisibilityPreset,
+                                onSetGranularElementEnabled = viewModel::setGranularElementEnabled,
+                                onUpdateWidgetCalibration = viewModel::updateWidgetFineCalibration
                             )
 
                             1 -> IslandAndRingSection(
@@ -444,7 +451,15 @@ fun LuminaAodAppRoot(
                                 onSelectCameraRingMode = viewModel::setCameraRingMode,
                                 onUpdateCameraHolePosition = viewModel::updateCameraHolePosition,
                                 onTriggerSimulatedNotification = viewModel::triggerSimulatedAppNotification,
-                                onClearNotifications = viewModel::clearNotificationLogs
+                                onClearNotifications = viewModel::clearNotificationLogs,
+                                onToggleBubbleMode = viewModel::toggleBubbleMode,
+                                onChangeBubbleSizeDp = viewModel::setBubbleSizeDp,
+                                onSelectBubbleExpandMode = viewModel::setBubbleExpandMode,
+                                onSelectEdgeSnapMode = viewModel::setIslandEdgeSnapMode,
+                                onToggleEdgePeek = viewModel::toggleIslandEdgePeek,
+                                onSnapIslandToEdgeShortcut = viewModel::snapIslandToEdgeShortcut,
+                                onSelectEntranceAnimation = viewModel::setIslandEntranceAnimation,
+                                onTriggerEntranceAnimationPreview = viewModel::triggerEntranceAnimationPreview
                             )
 
                             2 -> AppFilterRulesSection(
@@ -534,6 +549,7 @@ fun LuminaAodAppRoot(
                 callState = callState,
                 recentNotifications = recentNotifications,
                 hasRecentPushEvent = hasRecentPushEvent,
+                entrancePulseTimestamp = lastPulseTimestamp,
                 onToggleIslandExpand = viewModel::toggleIslandExpanded,
                 onPrimaryTapIsland = viewModel::handleIslandPrimaryTap,
                 onLongPressIsland = viewModel::handleIslandLongPress,
@@ -544,6 +560,8 @@ fun LuminaAodAppRoot(
                     viewModel.setActiveIslandActivity(act, expandImmediately = true)
                 },
                 onDragIslandByDeltaDp = viewModel::onDragIslandByDeltaDp,
+                onDragIslandEnd = viewModel::onDragIslandEnd,
+                onChangeBubbleExpandMode = viewModel::setBubbleExpandMode,
                 onPlayPauseMedia = viewModel::toggleMediaPlayPause,
                 onNextTrack = viewModel::skipToNextTrack,
                 onToggleTimer = viewModel::toggleTimerRunning,
@@ -630,7 +648,7 @@ private fun LuminaUnifiedTopHeaderCard(
                         }
                     }
                     Text(
-                        text = "11 Форм Острова • StandBy • Погода Мира • ICE QR",
+                        text = "Остров-Пузырь • 9 Анимаций • Прилипание к краям • 33 Тумблера",
                         style = MaterialTheme.typography.bodySmall,
                         fontSize = 10.sp,
                         color = MutedSlate
